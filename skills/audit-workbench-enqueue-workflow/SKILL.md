@@ -27,6 +27,22 @@ metadata:
 python3 scripts/install.py
 ```
 
+## 如何触发
+
+安装后下一轮对话再生效。用户下面任意一种说法都应进入本 skill：
+
+```text
+$audit-workbench-enqueue-workflow
+https://meetchances.feishu.cn/base/.....
+```
+
+```text
+给这个表格创建审核工作台入队工作流
+https://meetchances.feishu.cn/base/.....
+```
+
+缺 URL 时先问底表链接。
+
 ## 对用户的三轮对话
 
 缺 URL 时先多问一句：「底表 URL？」Wiki / `/base/` 都可以。
