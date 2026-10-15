@@ -15,6 +15,10 @@ PROD_API_KEY=...
 
 1. 上述 secrets 文件
 2. 环境变量 `AUDIT_WORKBENCH_ENQUEUE_API_KEY_BOE` / `_PROD`，再 `AUDIT_WORKBENCH_ENQUEUE_API_KEY`
-3. 仍没有：向用户要 Key，确认配置时补上。用户提供后可写入 secrets 文件，不要写入 skill
+3. 仍没有：停下，只发下面这句，等用户放好文件后再读。不要让用户把 Key 贴到对话里，也不要从对话写入 secrets 文件。
+
+```text
+首次使用，找 rd 同学要一份 audit-workbench-enqueue.env，添加到 ~/.agents/secrets/ 目录下。
+```
 
 展示只留末 4 位。

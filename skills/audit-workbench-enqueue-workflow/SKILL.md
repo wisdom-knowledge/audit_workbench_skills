@@ -59,7 +59,13 @@ lark-cli base +table-get --base-token <base_token> --table-id <table_id> --as us
 lark-cli base +field-list --base-token <base_token> --table-id <table_id> --as user --format json
 ```
 
-把 `+field-list` JSON 交给猜测脚本（[references/field-guess.md](references/field-guess.md)）。脚本只猜每轮「审核状态 / 审核员talent_id」。Key 读法见 [references/secrets.md](references/secrets.md)，展示只留末 4 位。
+把 `+field-list` JSON 交给猜测脚本（[references/field-guess.md](references/field-guess.md)）。脚本只猜每轮「审核状态 / 审核员talent_id」。Key 读法见 [references/secrets.md](references/secrets.md)，展示只留末 4 位。本机没有对应环境 Key 时不要出配置清单，只发：
+
+```text
+首次使用，找 rd 同学要一份 audit-workbench-enqueue.env，添加到 ~/.agents/secrets/ 目录下。
+```
+
+用户说放好后再读文件。不要让用户把 Key 贴到对话里。
 
 对用户只发下面这份清单。缺项留空并只给可指定的列名。用户确认前不要生成。
 
@@ -121,4 +127,4 @@ https://meetchances.feishu.cn/base/{app_token}?table={workflow_id}
 
 ## 失败就停
 
-权限不足、表找不到、轮次不是正整数、环境不是 `BOE` 或 `生产`、某轮两列猜不出且用户没指定、用户未确认每轮监听字段、非末轮找不到通过选项、enqueue URL 不是上述两个地址之一：停止并说明缺什么。
+权限不足、表找不到、轮次不是正整数、环境不是 `BOE` 或 `生产`、本机没有对应环境 Key、某轮两列猜不出且用户没指定、用户未确认每轮监听字段、非末轮找不到通过选项、enqueue URL 不是上述两个地址之一：停止并说明缺什么。
