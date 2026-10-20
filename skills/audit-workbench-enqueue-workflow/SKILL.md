@@ -17,7 +17,7 @@ metadata:
 
 金模板：`https://meetchances.feishu.cn/base/NFyGb7cQPaW5VjsKI51cINXknbS?table=wkfAaswR0PMw3b54` 下的「入队·第1轮（review_stage=1） 副本」（含晋级兜底）和「入队·第2轮（review_stage=2）」（末轮不串台）。
 
-身份：`--as user`。写操作走 `lark-cli base +workflow-create` / `+workflow-update`。新建默认停用，不要擅自 `+workflow-enable`。
+身份：`--as user`。写操作走 `lark-cli base +workflow-create` / `+workflow-update`。目录走 `+base-block-create` / `+base-block-move`。新建默认停用，不要擅自 `+workflow-enable`。
 
 ## 安装
 
@@ -127,6 +127,7 @@ lark-cli api GET '/open-apis/base/v3/bases/<base_token>/tables/<table_id>/field_
 - 串行创建；`client_token` 每条唯一
 - CLI 输出可能含 Key：回复不要回显，`--jq` 只取 `ok` / `title` / `workflow_id` / `status`；本地 JSON 用完删除
 - **不要启用**
+- 创建后放入名为「审核工作台」的 folder：`+base-block-list --type folder` 找同名；没有则根目录 `+base-block-create --type folder --name 审核工作台`。已有同名直接用，不要再建。逐轮 `+base-block-move --parent-id <folder_id>`，按第 1 轮、第 2 轮…顺序放入。
 - 创建过程不要向用户播报进度
 
 对用户只发：
@@ -150,4 +151,4 @@ https://meetchances.feishu.cn/base/{app_token}?table={workflow_id}
 
 ## 失败就停
 
-权限不足、表找不到、轮次不是正整数、环境不是 `BOE` 或 `生产`、本机没有对应环境 Key、某轮两列猜不出且用户没指定、用户未确认每轮监听字段、非末轮找不到通过选项、enqueue URL 不是上述两个地址之一：停止并说明缺什么。
+权限不足、表找不到、轮次不是正整数、环境不是 `BOE` 或 `生产`、本机没有对应环境 Key、某轮两列猜不出且用户没指定、用户未确认每轮监听字段、非末轮找不到通过选项、enqueue URL 不是上述两个地址之一、目录创建或移动失败：停止并说明缺什么。
