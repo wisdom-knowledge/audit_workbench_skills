@@ -10,12 +10,20 @@
 
 ## 安装
 
+本机只装入口。之后每次用 skill 都会从 GitHub `main` 拉最新正文，不必再 `git pull`。
+
 ```bash
 git clone git@github.com:wisdom-knowledge/audit_workbench_skills.git
 python3 skills/audit-workbench-enqueue-workflow/scripts/install.py
 ```
 
-安装后下一轮对话再生效。API Key 只放本机 `~/.agents/secrets/`，不要写入仓库。
+已装过旧版的人再跑一次 `install.py` 换成入口。安装后下一轮对话再生效。API Key 只放本机 `~/.agents/secrets/`，不要写入仓库。
+
+开发者链到本仓库（不拉远程）：
+
+```bash
+python3 skills/audit-workbench-enqueue-workflow/scripts/install.py --local
+```
 
 ## 如何触发
 

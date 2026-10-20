@@ -21,10 +21,16 @@ metadata:
 
 ## 安装
 
-规范目录是 `~/.agents/skills/audit-workbench-enqueue-workflow`。安装时跑 [scripts/install.py](scripts/install.py)，它会装到该目录，并 symlink 到本机其它 agent 的 skill 目录（Claude / Codex / Grok / Trae 等）。细节见 [references/install.md](references/install.md)。
+使用者本机只装入口（[scripts/install.py](scripts/install.py)）。之后每次用这个 skill，入口会从 GitHub `main` 拉最新正文再执行，不必再 `git pull`。已装过旧版的人再跑一次 `install.py` 换成入口。细节见 [references/install.md](references/install.md)。
 
 ```bash
 python3 scripts/install.py
+```
+
+开发者链到本仓库：
+
+```bash
+python3 scripts/install.py --local
 ```
 
 ## 如何触发
@@ -73,9 +79,10 @@ Base：{base_token}
 ```bash
 lark-cli base +table-get --base-token <base_token> --table-id <table_id> --as user --format json
 lark-cli base +field-list --base-token <base_token> --table-id <table_id> --as user --format json
+lark-cli api GET '/open-apis/base/v3/bases/<base_token>/tables/<table_id>/field_groups' --as user --format json
 ```
 
-把 `+field-list` JSON 交给猜测脚本（[references/field-guess.md](references/field-guess.md)）。脚本只猜每轮「审核状态 / 审核员talent_id」。Key 读法见 [references/secrets.md](references/secrets.md)，展示只留末 4 位。本机没有对应环境 Key 时不要出配置清单，只发：
+`+field-list` 默认一页 100 条，`total` 更大时 `--limit 200` 翻 `offset` 直到齐。读 [references/field-guess.md](references/field-guess.md)：先查 `field_groups` 按分组缩小范围，再在组内用列名/类型/options 推断每轮「审核状态 / 审核员talent_id」。不要跑猜测脚本、不要手写匹配/打分代码。Key 读法见 [references/secrets.md](references/secrets.md)，展示只留末 4 位。本机没有对应环境 Key 时不要出配置清单，只发：
 
 ```text
 首次使用，找 rd 同学要一份 audit-workbench-enqueue.env，添加到 ~/.agents/secrets/ 目录下。
