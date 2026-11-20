@@ -1,0 +1,28 @@
+[project]
+name = "audit-workbench-mcp"
+version = "0.1.0"
+description = "审核工作台管理端 MCP 薄封装，本地 stdio 运行"
+requires-python = ">=3.10"
+dependencies = [
+    "mcp>=1.10,<2",
+    "httpx>=0.27,<1",
+    "pydantic>=2.7,<3",
+]
+
+[project.scripts]
+audit-workbench-mcp = "audit_workbench_mcp.server:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/audit_workbench_mcp"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
