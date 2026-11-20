@@ -28,7 +28,19 @@ INSTRUCTIONS = """\
 6. wait_workflows 等待飞书工作流同步出结果；timed_out 时稍后再用 get_workflows 查询。
 7. 工作流 failed 时，按 lastError 排除原因后用 retry_workflows 只重试那一轮，再 wait_workflows。
 
+新项目推荐配置（替代第 2、3 步的手工配置）：
+a. get_editor 判断模版类型；parse_feishu 取底表字段；get_field_groups 取字段分组。
+b. get_reference_configs 取参考项目。按分组和语义判断轮次数，再逐轮产出对齐表：
+   {"rounds":[{"round":1,
+     "fields":[{"field_id":"<本底表字段ID>","matches":{"<参考项目ID>":"<该项目同轮对应字段名或 null>"}}],
+     "roles":{"status|reviewer|talent_id|audit_advice|audit_action":{"field_id":"…","basis":"exact|semantic|none","reason":"…"}},
+     "status_mapping":{"<飞书选项>":{"target":"<平台状态>","basis":"exact|semantic|none","reason":"…"}}}]}
+   fields 只放本底表里的字段；名称相同才算 exact，凭语义判断的一律 semantic。
+c. suggest_draft 保存草稿，把 report_markdown 原样展示给用户。
+d. 用户给出视图链接后调用 set_enqueue_views；要改字段或映射时，get_editor 读草稿后用 save_draft 保存。
+
 所有写操作默认只返回预览（confirm=false），把预览给用户看并得到同意后，再带 confirm=true 调用。
+例外：suggest_draft 在项目没有草稿时直接保存；set_enqueue_views 只写用户在对话中给出的链接，直接保存。
 生产环境（env=prod）的写操作还要传 confirm_project_id，值与 project_id 相同。
 返回 conflict 时先 get_editor 重新读取，不要强行覆盖。返回 unauthorized 时调用 login。
 """
@@ -263,6 +275,50 @@ async def wait_workflows(
     interval: Annotated[int, Field(ge=2, le=30)] = 5,
 ) -> dict[str, Any]:
     return await _service.wait_workflows(env, project_id, timeout, interval)
+
+
+@_tool("推荐配置第 1 步：取最近 limit 个同模版已发布项目的精简配置（字段按名称表示），供语义对齐。按发布时间倒序，排除当前项目。count 为 0 时没有可参考的项目，不要推荐。")
+async def get_reference_configs(
+    env: EnvArg,
+    project_id: ProjectIdArg,
+    workbench_type: Annotated[Literal[1, 2], Field(description="1=模版一，2=模版二")],
+    limit: Annotated[int, Field(ge=1, le=10)] = 5,
+) -> dict[str, Any]:
+    return await _service.get_reference_configs(env, project_id, workbench_type, limit)
+
+
+@_tool("推荐配置第 2 步：用 lark-cli 以用户身份读取当前底表的字段分组（分组名 → 字段 ID）。app_token / table_id 取自 parse_feishu。ok=false 时退回只按字段名判断，并把相关推荐的 basis 降为 semantic。")
+async def get_field_groups(
+    env: EnvArg,
+    app_token: Annotated[str, Field(min_length=1)],
+    table_id: Annotated[str, Field(min_length=1)],
+) -> dict[str, Any]:
+    return await _service.get_field_groups(env, app_token, table_id)
+
+
+@_tool("推荐配置第 3 步：按对齐表组装草稿并保存，返回 report_markdown（原样展示给用户）和配置页链接。计票、置信度、布局都由工具按规则计算。项目没有草稿时直接保存；已有草稿时只返回预览，用户同意覆盖后带 confirm=true 再调用。alignment 格式见工具 instructions。")
+async def suggest_draft(
+    env: EnvArg,
+    project_id: ProjectIdArg,
+    table_url: Annotated[str, Field(description="本项目底表链接")],
+    workbench_type: Annotated[Literal[1, 2], Field(description="1=模版一，2=模版二")],
+    alignment: Annotated[dict[str, Any], Field(description="Agent 产出的对齐表")],
+    limit: Annotated[int, Field(ge=1, le=10)] = 5,
+    confirm: ConfirmArg = False,
+    confirm_project_id: ConfirmProjectIdArg = None,
+) -> dict[str, Any]:
+    return await _service.suggest_draft(
+        env, project_id, table_url, workbench_type, alignment, limit, confirm, confirm_project_id
+    )
+
+
+@_tool("把用户给出的各轮入队视图链接写入现有草稿并保存。key 为轮次 ID（round-1、round-2…）。每个链接先解析，解析失败则不保存。返回各轮视图的筛选条件摘要。")
+async def set_enqueue_views(
+    env: EnvArg,
+    project_id: ProjectIdArg,
+    view_urls: Annotated[dict[str, str], Field(description="{轮次 ID: 视图链接}")],
+) -> dict[str, Any]:
+    return await _service.set_enqueue_views(env, project_id, view_urls)
 
 
 def main() -> None:

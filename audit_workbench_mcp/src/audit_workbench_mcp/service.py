@@ -14,7 +14,7 @@ import asyncio
 from datetime import datetime, timezone
 from typing import Any
 
-from . import errors, readiness
+from . import draft_builder, errors, field_groups, readiness, references, report
 from .client import AdminClient
 from .envs import get_env
 
@@ -475,3 +475,155 @@ class AuditWorkbenchService:
             "workbench_type": validation.get("workbenchType"),
         }
         return self._ok(env, project_id, {"summary": summary, "items": items})
+
+    # ---- draft suggestion (3.3) --------------------------------------------
+
+    @staticmethod
+    def page_url(env: str, project_id: int) -> str:
+        return f"{get_env(env).admin_url}/projects/{project_id}/audit-workbench?step=1"
+
+    async def _references(
+        self, env: str, workbench_type: int, exclude_project_id: int, limit: int
+    ) -> list[dict[str, Any]]:
+        target = get_env(env)
+        listing = await self._client.request(
+            target,
+            "GET",
+            "/admin/audit-workbench/recent-published",
+            params={
+                "workbench_type": workbench_type,
+                "limit": limit,
+                "exclude_project_id": exclude_project_id,
+            },
+        )
+        refs = []
+        for item in listing.get("items") or []:
+            editor = await self._editor(env, int(item["projectId"]))
+            published = editor.get("published") or {}
+            if published.get("config"):
+                refs.append(references.compact_config(item, published["config"]))
+        return refs
+
+    async def get_reference_configs(
+        self, env: str, project_id: int, workbench_type: int, limit: int = 5
+    ) -> dict[str, Any]:
+        refs = await self._references(env, workbench_type, project_id, limit)
+        return self._ok(env, project_id, {"count": len(refs), "references": refs})
+
+    async def get_field_groups(self, env: str, app_token: str, table_id: str) -> dict[str, Any]:
+        result = await asyncio.to_thread(field_groups.fetch_field_groups, app_token, table_id)
+        return self._ok(env, None, result)
+
+    async def suggest_draft(
+        self,
+        env: str,
+        project_id: int,
+        table_url: str,
+        workbench_type: int,
+        alignment: dict[str, Any],
+        limit: int = 5,
+        confirm: bool = False,
+        confirm_project_id: int | None = None,
+    ) -> dict[str, Any]:
+        """Build the draft from the alignment, save it, and return the report.
+
+        No draft yet: saved directly, a draft does not touch the live config.
+        A draft exists: returns the report as a preview; confirm=True overwrites it.
+        """
+        target = get_env(env)
+        parsed = await self._client.request(
+            target,
+            "POST",
+            "/admin/audit-workbench/parse-feishu",
+            json={"table_url": table_url, "project_id": project_id},
+        )
+        refs = await self._references(env, workbench_type, project_id, limit)
+        built = draft_builder.build_draft(
+            base_fields=parsed.get("fields") or [],
+            alignment=alignment,
+            references=refs,
+            workbench_type=workbench_type,
+            feishu_table_url=table_url,
+        )
+        current = await self._snapshot(env, project_id)
+        must_confirm = current["draft_exists"]
+        if must_confirm and not confirm:
+            text = report.render_report(
+                report=built["report"], env=env, project_id=project_id,
+                page_url=self.page_url(env, project_id), saved=False,
+            )
+            return {
+                "ok": True, "preview": True, "executed": False, "env": env,
+                "project_id": project_id, "report_markdown": text,
+                "impact": f"会覆盖现有草稿（更新于 {current['draft_updated_at']}）",
+                "next": "用户同意覆盖后，带 confirm=true 再次调用"
+                + (f"，并传 confirm_project_id={project_id}" if target.name == "prod" else ""),
+                "fetched_at": _now(),
+            }
+        if must_confirm:
+            self._check_confirm(env, project_id, confirm_project_id)
+        body = {
+            "config": built["config"],
+            "base_updated_at": current["draft_updated_at"],
+            "wizard_step": 1,
+            "force": False,
+            "feishu_app_token": parsed.get("app_token"),
+            "feishu_table_id": parsed.get("table_id"),
+            "feishu_view_id": parsed.get("view_id"),
+        }
+        saved = await self._write(
+            env, project_id, "PUT", f"/admin/projects/{project_id}/audit-workbench/draft", body
+        )
+        text = report.render_report(
+            report=built["report"], env=env, project_id=project_id,
+            page_url=self.page_url(env, project_id), saved=True,
+        )
+        return {**saved, "report_markdown": text, "page_url": self.page_url(env, project_id)}
+
+    async def set_enqueue_views(
+        self,
+        env: str,
+        project_id: int,
+        view_urls: dict[str, str],
+    ) -> dict[str, Any]:
+        """Fill each round's enqueue view link into the existing draft and save it.
+
+        Links are parsed first; any link that fails to parse stops the save.
+        Called with links the user gave in the conversation, so no preview step.
+        """
+        target = get_env(env)
+        editor = await self._editor(env, project_id)
+        draft = editor.get("draft")
+        if not draft:
+            raise errors.AuditWorkbenchError(errors.NOT_FOUND, "项目还没有草稿，先生成推荐配置")
+        config = draft["config"]
+        rules = {r.get("roundId"): r for r in config.get("auditStatusRules") or []}
+        unknown = [rid for rid in view_urls if rid not in rules]
+        if unknown:
+            raise errors.AuditWorkbenchError(
+                errors.VALIDATION_FAILED, "草稿里没有这些轮次", detail={"round_ids": unknown}
+            )
+        parsed = {}
+        for round_id, url in view_urls.items():
+            parsed[round_id] = await self._client.request(
+                target, "POST", "/admin/audit-workbench/parse-view-filter", json={"view_url": url}
+            )
+            rules[round_id]["enqueueViewUrl"] = url
+        body = {
+            "config": config,
+            "base_updated_at": draft.get("updated_at"),
+            "wizard_step": draft.get("wizard_step") or 1,
+            "force": False,
+            "feishu_app_token": draft.get("feishu_app_token"),
+            "feishu_table_id": draft.get("feishu_table_id"),
+            "feishu_view_id": draft.get("feishu_view_id"),
+        }
+        saved = await self._write(
+            env, project_id, "PUT", f"/admin/projects/{project_id}/audit-workbench/draft", body
+        )
+        saved["views"] = {
+            rid: {"view_name": p.get("view_name"), "summary": p.get("summary_text")}
+            for rid, p in parsed.items()
+        }
+        saved["page_url"] = self.page_url(env, project_id).replace("step=1", "step=2")
+        return saved

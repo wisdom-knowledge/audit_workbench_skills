@@ -20,6 +20,7 @@ EXPECTED_TOOLS = {
     "add_auditors", "remove_auditors", "save_draft", "discard_draft", "publish",
     "retry_workflows", "set_runtime_status",
     "check_readiness", "validate_config", "get_workflows", "wait_workflows",
+    "get_reference_configs", "get_field_groups", "suggest_draft", "set_enqueue_views",
 }
 
 
