@@ -19,14 +19,8 @@
 
 ## 处理用户的修改
 
-用户说要增减字段、改展示位置或权限时：
-
-1. `get_editor(env, project_id)` 读取当前草稿，拿到 `draft.config` 和 `draft.updated_at`。
-2. 在本地改这份 config，只改用户点名的部分，其余原样保留。
-3. `save_draft` 保存，`base_updated_at` 原样回传 `draft.updated_at`，不做时区换算。默认只返回
-   预览，给用户看后带 `confirm=true` 再调用一次。
-
-不要自己重新拼一份 config，也不要用对齐表覆盖用户已经改过的内容。
+用户要增减字段、改展示位置、权限或映射时，按 [改配置](../../audit-workbench-config/SKILL.md) 的
+「改」执行，改完回到这里继续收集入队视图。不要用对齐表覆盖用户已经改过的内容。
 
 ## 入队视图链接
 
@@ -36,14 +30,3 @@
 
 用户只给了一部分轮次时，只更新这些轮次，其余留空并提醒还差哪几轮。任何一轮的入队视图为空时，
 不进入阶段 3：发布时会因为视图链接解析失败而被拒绝，或发布后该轮不会入队。
-
-## 写入进度
-
-```json
-{"stage": 2, "status": "done", "draft_saved": true,
- "page_url": "https://admin-test.meetchances.com/projects/1234/audit-workbench?step=1",
- "enqueue_views": {"round-1": "...", "round-2": "..."},
- "round_count": 2, "report_shown": true}
-```
-
-如果停在等待用户提供视图链接，`status` 写 `waiting_views`，并列出缺哪几轮。

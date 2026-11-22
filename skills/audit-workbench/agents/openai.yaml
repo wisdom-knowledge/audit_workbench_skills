@@ -1,0 +1,6 @@
+interface:
+  display_name: "审核工作台"
+  short_description: "审核工作台入口：接入、改配置、工作流、审核员"
+  default_prompt: "Use $audit-workbench to handle an audit-workbench task: onboard a project, change its config, fix workflows, or manage auditors."
+policy:
+  allow_implicit_invocation: true

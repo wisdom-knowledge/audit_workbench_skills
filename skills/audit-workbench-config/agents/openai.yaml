@@ -1,0 +1,6 @@
+interface:
+  display_name: "审核工作台改配置"
+  short_description: "修改已接入项目的审核工作台配置并发布"
+  default_prompt: "Use $audit-workbench-config to change an onboarded project's audit-workbench config and publish it."
+policy:
+  allow_implicit_invocation: true

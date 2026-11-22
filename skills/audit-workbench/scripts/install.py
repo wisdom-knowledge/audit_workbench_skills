@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Install this skill by symlinking the full folder into each agent's skills dir.
+"""Install the audit-workbench entry skill and its sub-skills by symlink.
 
-No remote fetch, no bootstrap stub: the folder under ~/.agents/skills is a
-symlink to this repo, so edits here take effect immediately. Other agent skill
-dirs get a symlink to that canonical link.
+Each skill folder in this repo gets a canonical link under ~/.agents/skills, so
+edits here take effect immediately; other agent skill dirs link to that
+canonical link. Sub-skills reference each other by relative path, so they must
+be installed together. No remote fetch, no bootstrap stub.
 """
 
 from __future__ import annotations
@@ -14,7 +15,13 @@ import shutil
 import sys
 from pathlib import Path
 
-SKILL_NAME = "audit-workbench-onboard"
+SKILL_NAMES = (
+    "audit-workbench",
+    "audit-workbench-onboard",
+    "audit-workbench-config",
+    "audit-workbench-workflow",
+    "audit-workbench-auditors",
+)
 
 WELL_KNOWN = (
     Path(".agents") / "skills",
@@ -71,20 +78,9 @@ def discover_skill_dirs(home: Path) -> list[Path]:
     return found
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--source", default=str(Path(__file__).resolve().parents[1]))
-    parser.add_argument("--dry-run", action="store_true")
-    args = parser.parse_args()
-
-    source = Path(args.source).expanduser().resolve()
-    if not (source / "SKILL.md").is_file():
-        print(f"not a skill folder: {source}", file=sys.stderr)
-        return 2
-
-    home = Path.home()
-    canonical = home / ".agents" / "skills" / SKILL_NAME
-    if args.dry_run:
+def link_skill(name: str, source: Path, home: Path, roots: list[Path], dry_run: bool) -> None:
+    canonical = home / ".agents" / "skills" / name
+    if dry_run:
         print(f"would link {canonical} -> {source}")
     else:
         canonical.parent.mkdir(parents=True, exist_ok=True)
@@ -93,19 +89,38 @@ def main() -> int:
             canonical.symlink_to(source, target_is_directory=True)
         print(f"linked {canonical} -> {source}")
 
-    for root in discover_skill_dirs(home):
-        link = root / SKILL_NAME
+    for root in roots:
         if root == canonical.parent:
             continue
+        link = root / name
         if link.is_symlink() and _same_dir(link, canonical):
             print(f"ok {link}")
             continue
-        if args.dry_run:
+        if dry_run:
             print(f"would link {link} -> {canonical}")
             continue
         _clear(link)
         link.symlink_to(canonical, target_is_directory=True)
         print(f"linked {link} -> {canonical}")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--skills-root", default=str(Path(__file__).resolve().parents[2]))
+    parser.add_argument("--dry-run", action="store_true")
+    args = parser.parse_args()
+
+    skills_root = Path(args.skills_root).expanduser().resolve()
+    sources = {name: skills_root / name for name in SKILL_NAMES}
+    missing = [name for name, path in sources.items() if not (path / "SKILL.md").is_file()]
+    if missing:
+        print(f"missing skill folders under {skills_root}: {', '.join(missing)}", file=sys.stderr)
+        return 2
+
+    home = Path.home()
+    roots = discover_skill_dirs(home)
+    for name, source in sources.items():
+        link_skill(name, source, home, roots, args.dry_run)
     return 0
 
 

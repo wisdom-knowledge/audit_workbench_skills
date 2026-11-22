@@ -1,0 +1,6 @@
+interface:
+  display_name: "审核工作台工作流"
+  short_description: "查同步状态、重试、模版二修补、启用飞书工作流"
+  default_prompt: "Use $audit-workbench-workflow to check, retry, and enable the Feishu workflows generated for a project."
+policy:
+  allow_implicit_invocation: true

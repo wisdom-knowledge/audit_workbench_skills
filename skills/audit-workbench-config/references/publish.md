@@ -1,6 +1,7 @@
-# 阶段 3：发布前确认
+# 发布
 
-执行前提：草稿已保存，每一轮的入队视图链接都已写入。
+执行前提：草稿已保存，每一轮的入队视图链接都不为空。有轮次为空时先补，否则发布会因视图解析失败
+被拒绝，或发布后该轮不会入队。
 
 ## 检查
 
@@ -17,11 +18,11 @@
 待确认：配置信息是否无误（附配置页链接和草稿保存时间）、工作流配置是否无误（列出发布后会创建
 的工作流及监听的列）。模版二会提示「审核操作」工作流需要人工修补。
 
-如果返回里有 `blockers`，把清单给用户看的同时说明这些必须先处理，不要询问是否发布。
+返回里有 `blockers` 时，展示清单的同时说明这些必须先处理，不要询问是否发布。
 
 ## 发布
 
-用户明确确认后（例如回复「确认发布」），调用：
+用户明确确认后（例如回复「确认发布」）调用：
 
 ```
 publish(env, project_id, config, base_version, confirm=true, confirm_project_id=project_id)
@@ -30,17 +31,13 @@ publish(env, project_id, config, base_version, confirm=true, confirm_project_id=
 - `config` 取 `get_editor` 返回的 `draft.config`，不要重新组装。
 - `base_version` 取 `pre_publish_checklist` 返回的 `base_version`；从未发布时是 0。
 - 生产环境必须传 `confirm_project_id`。
-- 先按写操作规则展示一次预览（`confirm=false`），确认后才执行。用户已在清单阶段确认过配置内容时，
-  仍然要把这次发布的目标环境、项目和配置版本说清楚再执行。
+- 先按写操作规则展示一次预览（`confirm=false`）。用户在清单阶段已经确认过配置内容，仍要把这次
+  发布的目标环境、项目和配置版本说清楚再执行。
+- 用户确认清单和真正发布之间隔了几轮对话时，发布前重新 `get_editor`，草稿保存时间或已发布版本
+  变了就重新走清单。
 
-返回 `conflict` 时不强行覆盖：重新 `get_editor` 读取最新 `published_version` 和草稿，说明
-版本已被他人更新，请用户重新确认后再发布。
+返回 `conflict` 时不强行覆盖：重新 `get_editor` 读取最新的已发布版本和草稿，说明版本已被他人
+更新，请用户重新确认后再发布。
 
-发布成功后记下返回的 `version` 和 `published_at`。
-
-## 写入进度
-
-```json
-{"stage": 3, "status": "done", "published_version": 1, "published_at": "...",
- "checklist_confirmed": true}
-```
+发布成功后记下返回的 `version` 和 `published_at`。发布会删除草稿，之后再改配置会以这个版本为底
+新建草稿。

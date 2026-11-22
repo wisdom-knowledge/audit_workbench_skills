@@ -1,4 +1,4 @@
-# 阶段 4：工作流交接
+# 发布后交接
 
 ## 等待同步并列出工作流
 
@@ -9,12 +9,9 @@ lark-cli 回读每条工作流在飞书上的启用状态和人工修补状态�
 和链接，末尾请用户确认后启用。
 
 - `timed_out=true` 时告诉用户还有工作流在同步，稍后再查一次，不要询问是否启用。可以再次调用
-  `created_workflows`，或只查状态用 `get_workflows`。
-- 有 `problems` 时逐条转述。同步失败或状态为 `failed` 的，先用 `retry_workflows` 只重试出错的
-  那几个轮次和种类：先展示预览，确认后带 `confirm=true` 执行，再重新调用 `created_workflows`。
-  重试不会无限进行：Worker 每条最多尝试 5 次，失败后按 3n 秒退避；手动重试会清零计数。
-- 状态为 `manual` 时说明配置有变化但工作流已人工修补，未被自动更新，按返回的说明请用户在
-  飞书上按新列名修改，或用 `forceUpdate` 重试覆盖（会丢失人工补的步骤）。
+  `created_workflows`，只查状态用 `get_workflows`。
+- 有 `problems` 时逐条转述。同步失败的按 [工作流](../SKILL.md) 的「重试」处理，重试完再调用
+  `created_workflows`。
 
 ## 模版二的人工修补
 
@@ -27,17 +24,11 @@ lark-cli 回读每条工作流在飞书上的启用状态和人工修补状态�
 
 ## 启用
 
-用户确认清单无误后调用 `enable_workflows(env, project_id)`，先预览；确认后带 `confirm=true`，
+用户确认清单无误后调用 `enable_workflows(env, project_id)`，先预览；同意后带 `confirm=true`，
 生产环境另传 `confirm_project_id`。工具只启用已同步、且在飞书上确实处于未启用的工作流；
 未修补的模版二审核操作工作流会被跳过，并在结果里说明原因。
 
-启用后工具会回读状态。返回里 `ok=false` 的条目逐条转述原因，不要重复调用同一条超过一次。
+启用后工具会回读状态。返回里 `ok=false` 的条目逐条转述原因，同一条不要重试超过一次。
 
-## 写入进度
-
-```json
-{"stage": 4, "status": "done", "workflows_enabled": ["一轮 · 入队", "二轮 · 入队"],
- "template2_repair_confirmed": true, "pending": []}
-```
-
-还在等人工修补时写 `status: waiting_repair`，并记下缺哪几条。
+全部启用后，底表记录满足入队条件就会为审核员建任务。还有工作流没启用时，把没启用的条目和原因
+列给用户，不说成已完成。

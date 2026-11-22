@@ -24,12 +24,3 @@
 
 模板类型取 `get_editor` 里草稿或已发布配置的 `workbenchType`。取不到时问用户用模版一还是模版二。
 模版一是审核状态下拉选择，模版二是打回/通过/拒绝按钮。这个值贯穿阶段 2 到阶段 4。
-
-## 写入进度
-
-```json
-{"stage": 1, "status": "done", "env": "boe", "project_id": 1234,
- "table_url": "...", "app_token": "...", "table_id": "...",
- "workbench_type": 1, "field_groups_ok": true, "collaborator": "added",
- "published_version": 0, "draft_updated_at": null}
-```
