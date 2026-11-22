@@ -27,6 +27,11 @@
 | `get_field_groups` | lark-cli 以用户身份读取底表字段分组 | 读 |
 | `suggest_draft` | 按对齐表组装草稿并保存，返回终端报告 | 写（无草稿时直接保存） |
 | `set_enqueue_views` | 把用户给出的入队视图链接写入草稿 | 写（直接保存） |
+| `ensure_app_collaborator` | lark-cli 以用户身份把「人才招聘」设为底表可管理协作者 | 写（初始化时直接执行） |
+| `pre_publish_checklist` | 草稿 + `validate`，列出发布后会创建的工作流 | 读 |
+| `created_workflows` | 等待同步，再用 lark-cli 回读启用状态和人工修补状态 | 读 |
+| `enable_workflows` | lark-cli `+workflow-enable`，模版二审核操作工作流修补后才启用 | 写 |
+| `check_auditor_binding` | `GET .../auditors/feishu-binding` | 读 |
 
 ### 推荐配置
 

@@ -29,7 +29,7 @@ INSTRUCTIONS = """\
 7. 工作流 failed 时，按 lastError 排除原因后用 retry_workflows 只重试那一轮，再 wait_workflows。
 
 新项目推荐配置（替代第 2、3 步的手工配置）：
-a. get_editor 判断模版类型；parse_feishu 取底表字段；get_field_groups 取字段分组。
+a. get_editor 判断模版类型；parse_feishu 取底表字段；ensure_app_collaborator 设置人才招聘协作者；get_field_groups 取字段分组。
 b. get_reference_configs 取参考项目。按分组和语义判断轮次数，再逐轮产出对齐表：
    {"rounds":[{"round":1,
      "fields":[{"field_id":"<本底表字段ID>","matches":{"<参考项目ID>":"<该项目同轮对应字段名或 null>"}}],
@@ -38,6 +38,11 @@ b. get_reference_configs 取参考项目。按分组和语义判断轮次数，�
    fields 只放本底表里的字段；名称相同才算 exact，凭语义判断的一律 semantic。
 c. suggest_draft 保存草稿，把 report_markdown 原样展示给用户。
 d. 用户给出视图链接后调用 set_enqueue_views；要改字段或映射时，get_editor 读草稿后用 save_draft 保存。
+
+发布与交接：
+e. pre_publish_checklist 展示发布前清单，用户确认后 publish。
+f. created_workflows 等待同步并列出已创建的工作流，用户确认后 enable_workflows。
+g. 用户提供审核员 talent_id 后 add_auditors，再 check_auditor_binding；未绑定的务必提醒。
 
 所有写操作默认只返回预览（confirm=false），把预览给用户看并得到同意后，再带 confirm=true 调用。
 例外：suggest_draft 在项目没有草稿时直接保存；set_enqueue_views 只写用户在对话中给出的链接，直接保存。
@@ -319,6 +324,46 @@ async def set_enqueue_views(
     view_urls: Annotated[dict[str, str], Field(description="{轮次 ID: 视图链接}")],
 ) -> dict[str, Any]:
     return await _service.set_enqueue_views(env, project_id, view_urls)
+
+
+@_tool("初始化：用 lark-cli 以用户身份把「人才招聘」应用设为底表可管理协作者（不在就添加，权限不够就升级）。后端 Worker 用这个应用建工作流，发布前必须完成。app_token 取自 parse_feishu。用户已授权直接执行，结果要告诉用户。")
+async def ensure_app_collaborator(
+    env: EnvArg, app_token: Annotated[str, Field(min_length=1)]
+) -> dict[str, Any]:
+    return await _service.ensure_app_collaborator(env, app_token)
+
+
+@_tool("发布前确认清单：配置页链接、发布后会创建的工作流（模版二提示审核操作工作流需人工修补），以及发布前必须处理的问题。把 checklist_markdown 原样展示给用户；用户回复确认后再调用 publish（base_version 用返回的 base_version）。")
+async def pre_publish_checklist(env: EnvArg, project_id: ProjectIdArg) -> dict[str, Any]:
+    return await _service.pre_publish_checklist(env, project_id)
+
+
+@_tool("发布后：等待工作流同步，再回读每条工作流在飞书上的启用状态和人工修补状态。把 workflows_markdown 原样展示给用户，由用户确认后调用 enable_workflows。")
+async def created_workflows(
+    env: EnvArg,
+    project_id: ProjectIdArg,
+    timeout: Annotated[int, Field(ge=10, le=180)] = 90,
+) -> dict[str, Any]:
+    return await _service.created_workflows(env, project_id, timeout)
+
+
+@_tool("启用已同步的工作流；模版二的审核操作工作流要回读确认已人工修补才启用。启用后回读状态。写操作：默认只返回预览，用户确认后带 confirm=true。")
+async def enable_workflows(
+    env: EnvArg,
+    project_id: ProjectIdArg,
+    confirm: ConfirmArg = False,
+    confirm_project_id: ConfirmProjectIdArg = None,
+) -> dict[str, Any]:
+    return await _service.enable_workflows(env, project_id, confirm, confirm_project_id)
+
+
+@_tool("检查项目审核员是否已绑定飞书账号（读飞书用户绑定表）。把 binding_markdown 原样展示给用户，未绑定的用 🔴 标出，务必提醒用户通知审核员在专家端自行绑定。")
+async def check_auditor_binding(
+    env: EnvArg,
+    project_id: ProjectIdArg,
+    talent_ids: Annotated[list[int] | None, Field(description="只查这些人；不传查全部启用中的审核员")] = None,
+) -> dict[str, Any]:
+    return await _service.check_auditor_binding(env, project_id, talent_ids)
 
 
 def main() -> None:

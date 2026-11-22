@@ -13,8 +13,9 @@ RUNNING = "running"  # worker is writing it to Feishu
 RETRYING = "retrying"  # failed at least once, will be retried automatically
 SYNCED = "synced"
 FAILED = "failed"  # reached the retry limit; needs retry_workflows
+MANUAL = "manual"  # config changed but the workflow was repaired by hand; not overwritten
 
-_TERMINAL = {SYNCED, FAILED}
+_TERMINAL = {SYNCED, FAILED, MANUAL}
 
 # Readiness item levels.
 BLOCKER = "blocker"  # publish will fail
@@ -28,6 +29,8 @@ def workflow_display_status(item: dict[str, Any]) -> str:
         return SYNCED
     if status == "FAILED":
         return FAILED
+    if status == "MANUAL":
+        return MANUAL
     if status == "RUNNING":
         return RUNNING
     if status == "PENDING" and item.get("lastError"):
@@ -68,6 +71,9 @@ def summarize_workflows(data: dict[str, Any]) -> dict[str, Any]:
             label = f"{item.get('stageLabel', '')}{item.get('kindLabel', '')}"
             state = "已到重试上限" if item["display_status"] == FAILED else "失败后等待自动重试"
             problems.append(f"{label}工作流{state}：{item.get('lastError') or '无错误信息'}")
+        elif item["display_status"] == MANUAL:
+            label = f"{item.get('stageLabel', '')}{item.get('kindLabel', '')}"
+            problems.append(f"{label}工作流需人工同步：{item.get('lastError') or ''}")
 
     settled = bool(items) and all(i["display_status"] in _TERMINAL for i in items)
     return {

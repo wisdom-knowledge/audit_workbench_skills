@@ -14,7 +14,7 @@ import asyncio
 from datetime import datetime, timezone
 from typing import Any
 
-from . import draft_builder, errors, field_groups, readiness, references, report
+from . import draft_builder, errors, field_groups, handoff, lark, readiness, references, report
 from .client import AdminClient
 from .envs import get_env
 
@@ -627,3 +627,104 @@ class AuditWorkbenchService:
         }
         saved["page_url"] = self.page_url(env, project_id).replace("step=1", "step=2")
         return saved
+
+    # ---- hand-off (3.4) -------------------------------------------------------
+
+    async def ensure_app_collaborator(self, env: str, app_token: str) -> dict[str, Any]:
+        """Initialization step: make 人才招聘 a manage collaborator of the base."""
+        result = await asyncio.to_thread(lark.ensure_app_collaborator, app_token)
+        return self._ok(env, None, result)
+
+    async def pre_publish_checklist(self, env: str, project_id: int) -> dict[str, Any]:
+        editor = await self._editor(env, project_id)
+        draft = editor.get("draft")
+        if not draft:
+            raise errors.AuditWorkbenchError(errors.NOT_FOUND, "项目没有草稿，没有可发布的内容")
+        config = draft["config"]
+        validation = await self._client.request(
+            get_env(env),
+            "POST",
+            f"/admin/projects/{project_id}/audit-workbench/validate",
+            json={"config": config},
+        )
+        workbench_type = int(validation.get("workbenchType") or config.get("workbenchType") or 1)
+        planned = handoff.planned_workflows(config, workbench_type)
+        blockers = [str(e.get("message")) for e in validation.get("errors") or []]
+        blockers += [f"{e.get('message')}（发布能成功，但工作流建不出来）" for e in validation.get("workflowErrors") or []]
+        text = handoff.render_pre_publish_checklist(
+            env=env, project_id=project_id, page_url=self.page_url(env, project_id),
+            draft_updated_at=draft.get("updated_at"), workbench_type=workbench_type,
+            planned=planned, blockers=blockers,
+        )
+        return self._ok(
+            env, project_id,
+            {"publishable": not validation.get("errors"), "planned": planned, "blockers": blockers},
+            checklist_markdown=text,
+            base_version=(editor.get("published") or {}).get("version") or 0,
+        )
+
+    async def _workflow_rows(self, summary: dict[str, Any]) -> list[dict[str, Any]]:
+        app_token = summary.get("appToken") or ""
+        states: dict[str, dict[str, Any]] = {}
+        for item in summary.get("items") or []:
+            wid = item.get("workflowId")
+            if not wid or not app_token:
+                continue
+            state = await asyncio.to_thread(lark.get_workflow, app_token, wid)
+            state["repaired"] = lark.has_manual_clear_step(state.get("steps") or [])
+            states[wid] = state
+        return handoff.workflow_rows(summary, states)
+
+    async def created_workflows(
+        self, env: str, project_id: int, timeout: float = 90, interval: float = 5
+    ) -> dict[str, Any]:
+        """After publish: wait for sync, then read each workflow's enabled / repaired state."""
+        waited = await self.wait_workflows(env, project_id, timeout, interval)
+        summary = waited["data"]
+        rows = await self._workflow_rows(summary)
+        text = handoff.render_workflows(rows, summary.get("problems") or [], waited["timed_out"])
+        return self._ok(env, project_id, {"rows": rows, "summary": summary},
+                        workflows_markdown=text, timed_out=waited["timed_out"])
+
+    async def enable_workflows(
+        self,
+        env: str,
+        project_id: int,
+        confirm: bool = False,
+        confirm_project_id: int | None = None,
+    ) -> dict[str, Any]:
+        """Enable synced workflows. Template-two audit-action workflows only once repaired."""
+        summary = await self._workflows(env, project_id)
+        rows = await self._workflow_rows(summary)
+        targets = [r for r in rows if r["can_enable"]]
+        skipped = [{"label": r["label"], "reason": r["skip_reason"]} for r in rows if not r["can_enable"]]
+        if not confirm:
+            return await self._preview(
+                env, project_id, "enable_workflows",
+                {"enable": [r["label"] for r in targets], "skip": skipped},
+                "启用后，底表记录满足入队条件就会为审核员创建任务。", [],
+                current={"workflows": len(rows)},
+            )
+        self._check_confirm(env, project_id, confirm_project_id)
+        app_token = summary.get("appToken") or ""
+        results = []
+        for r in targets:
+            res = await asyncio.to_thread(lark.enable_workflow, app_token, r["workflow_id"])
+            after = await asyncio.to_thread(lark.get_workflow, app_token, r["workflow_id"])
+            results.append({
+                "label": r["label"],
+                "ok": bool(res.get("ok")) and after.get("status") == handoff.ENABLED,
+                "message": res.get("message") or ("" if after.get("status") == handoff.ENABLED else "回读状态不是已启用"),
+            })
+        return self._ok(env, project_id, {"enabled": results, "skipped": skipped}, executed=True)
+
+    async def check_auditor_binding(
+        self, env: str, project_id: int, talent_ids: list[int] | None = None
+    ) -> dict[str, Any]:
+        params = {"talent_ids": talent_ids} if talent_ids else None
+        data = await self._client.request(
+            get_env(env), "GET", f"/admin/projects/{project_id}/auditors/feishu-binding", params=params
+        )
+        items = data.get("items") or []
+        return self._ok(env, project_id, data, binding_markdown=handoff.render_binding(items),
+                        unbound=[i["talentId"] for i in items if i.get("state") == "UNBOUND"])
