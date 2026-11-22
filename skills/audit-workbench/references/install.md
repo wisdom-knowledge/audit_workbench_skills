@@ -1,6 +1,6 @@
 # 安装
 
-入口 `audit-workbench` 和四个子技能（onboard、config、workflow、auditors）一起安装。子技能之间用
+入口 `audit-workbench` 和五个子技能（onboard、config、workflow、auditors、ops）一起安装。子技能之间用
 相对路径互相引用，只装其中一个会找不到共用的规则。
 
 安装脚本把每个 skill 目录软链到 `~/.agents/skills/`，再给其他客户端的 skills 目录建软链。改仓库里
@@ -30,4 +30,4 @@ python3 skills/audit-workbench/scripts/install.py --dry-run
 ls -l ~/.agents/skills/ | grep audit-workbench
 ```
 
-应看到五个软链都指向本仓库的 `skills/` 下对应目录。安装后在新一轮对话里生效。
+应看到六个软链都指向本仓库的 `skills/` 下对应目录。安装后在新一轮对话里生效。

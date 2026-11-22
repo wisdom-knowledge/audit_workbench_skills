@@ -18,6 +18,7 @@ NAMES = (
     "audit-workbench-config",
     "audit-workbench-workflow",
     "audit-workbench-auditors",
+    "audit-workbench-ops",
 )
 LINK = re.compile(r"\]\(([^)#\s]+\.md)\)")
 CODE = re.compile(r"`([a-z][a-z_]+)(?:\(|`)")
@@ -57,7 +58,8 @@ def test_tool_names_exist_in_mcp():
         "report_markdown", "checklist_markdown", "workflows_markdown", "binding_markdown",
         "page_url", "pending_count", "needs_reassign", "feishu_table_url", "status_mapping",
         "talent_id", "audit_advice", "audit_action", "workbench_type", "published_at",
-        "field_id", "project_id", "missing_views", "draft_after_publish",
+        "field_id", "project_id", "missing_views", "draft_after_publish", "trace_markdown",
+        "all_pass", "record_id",
     }
     unknown = set()
     for doc in _docs():

@@ -21,6 +21,7 @@ SKILL_NAMES = (
     "audit-workbench-config",
     "audit-workbench-workflow",
     "audit-workbench-auditors",
+    "audit-workbench-ops",
 )
 
 WELL_KNOWN = (

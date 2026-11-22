@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from . import draft_builder, errors, field_groups, handoff, lark, onboard_status, readiness, references, report
+from . import trace as trace_mod
 from .client import AdminClient
 from .envs import get_env
 
@@ -733,6 +734,30 @@ class AuditWorkbenchService:
         count = int((auditors.get("summary") or {}).get("auditor_count") or auditors.get("count") or 0)
         result = onboard_status.judge(editor, workflows, rows, count, binding.get("items") or [])
         return self._ok(env, project_id, result, summary=snapshot_from_editor(editor))
+
+    async def trace(
+        self,
+        env: str,
+        project_id: int,
+        record_id: str,
+        talent_id: int | None = None,
+        stage: int | None = None,
+    ) -> dict[str, Any]:
+        """Backend record trace, plus the Feishu enabled state of that round's enqueue workflow."""
+        params = {"record_id": record_id, "talent_id": talent_id, "stage": stage}
+        data = await self._client.request(
+            get_env(env), "GET", f"/admin/projects/{project_id}/audit-workbench/trace", params=params
+        )
+        check = next(
+            (c for c in data.get("checks") or [] if c["key"] == "workflow" and c["state"] == "unverified"),
+            None,
+        )
+        app_token = (data.get("workflows") or {}).get("appToken") or ""
+        if check is not None and check.get("workflowId") and app_token:
+            state = await asyncio.to_thread(lark.get_workflow, app_token, check["workflowId"])
+            trace_mod.apply_workflow_state(data["checks"], state)
+            data["diagnosis"] = trace_mod.diagnose(data["checks"], data.get("dataUrl") or "")
+        return self._ok(env, project_id, data, trace_markdown=trace_mod.render(data))
 
     async def check_auditor_binding(
         self, env: str, project_id: int, talent_ids: list[int] | None = None

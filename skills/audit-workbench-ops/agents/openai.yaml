@@ -1,0 +1,6 @@
+interface:
+  display_name: "审核工作台排障"
+  short_description: "按 record_id 查记录卡在哪一环、证据和下一步"
+  default_prompt: "Use $audit-workbench-ops to find out why a record is not in the expert workbench, or why a submission did not reach Feishu."
+policy:
+  allow_implicit_invocation: true
