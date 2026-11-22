@@ -14,7 +14,7 @@ import asyncio
 from datetime import datetime, timezone
 from typing import Any
 
-from . import draft_builder, errors, field_groups, handoff, lark, readiness, references, report
+from . import draft_builder, errors, field_groups, handoff, lark, onboard_status, readiness, references, report
 from .client import AdminClient
 from .envs import get_env
 
@@ -717,6 +717,22 @@ class AuditWorkbenchService:
                 "message": res.get("message") or ("" if after.get("status") == handoff.ENABLED else "回读状态不是已启用"),
             })
         return self._ok(env, project_id, {"enabled": results, "skipped": skipped}, executed=True)
+
+    async def onboard_status(self, env: str, project_id: int) -> dict[str, Any]:
+        """One read of everything resume needs: editor, workflows, auditors, binding."""
+        target = get_env(env)
+        base = f"/admin/projects/{project_id}"
+        editor, workflows, auditors, binding = await asyncio.gather(
+            self._editor(env, project_id),
+            self._workflows(env, project_id),
+            self._client.request(target, "GET", f"{base}/auditors", params={"skip": 0, "limit": 1}),
+            self._client.request(target, "GET", f"{base}/auditors/feishu-binding"),
+        )
+        published = int((editor.get("published") or {}).get("version") or 0)
+        rows = await self._workflow_rows(workflows) if published and not editor.get("draft") else []
+        count = int((auditors.get("summary") or {}).get("auditor_count") or auditors.get("count") or 0)
+        result = onboard_status.judge(editor, workflows, rows, count, binding.get("items") or [])
+        return self._ok(env, project_id, result, summary=snapshot_from_editor(editor))
 
     async def check_auditor_binding(
         self, env: str, project_id: int, talent_ids: list[int] | None = None

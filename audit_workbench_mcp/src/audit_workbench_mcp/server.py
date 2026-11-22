@@ -44,6 +44,8 @@ e. pre_publish_checklist 展示发布前清单，用户确认后 publish。
 f. created_workflows 等待同步并列出已创建的工作流，用户确认后 enable_workflows。
 g. 用户提供审核员 talent_id 后 add_auditors，再 check_auditor_binding；未绑定的务必提醒。
 
+中途恢复时调用 onboard_status，按返回的 stage 接着做。
+
 所有写操作默认只返回预览（confirm=false），把预览给用户看并得到同意后，再带 confirm=true 调用。
 例外：suggest_draft 在项目没有草稿时直接保存；set_enqueue_views 只写用户在对话中给出的链接，直接保存。
 生产环境（env=prod）的写操作还要传 confirm_project_id，值与 project_id 相同。
@@ -355,6 +357,11 @@ async def enable_workflows(
     confirm_project_id: ConfirmProjectIdArg = None,
 ) -> dict[str, Any]:
     return await _service.enable_workflows(env, project_id, confirm, confirm_project_id)
+
+
+@_tool("续接用：一次读取配置、工作流同步与飞书启用状态、审核员名单和飞书绑定，按接入阶段顺序判断项目停在哪一步。返回 stage（1–6）、stage_name、reason 和各项缺口。只读。")
+async def onboard_status(env: EnvArg, project_id: ProjectIdArg) -> dict[str, Any]:
+    return await _service.onboard_status(env, project_id)
 
 
 @_tool("检查项目审核员是否已绑定飞书账号（读飞书用户绑定表）。把 binding_markdown 原样展示给用户，未绑定的用 🔴 标出，务必提醒用户通知审核员在专家端自行绑定。")

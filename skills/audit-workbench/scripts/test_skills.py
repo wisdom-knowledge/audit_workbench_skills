@@ -57,7 +57,7 @@ def test_tool_names_exist_in_mcp():
         "report_markdown", "checklist_markdown", "workflows_markdown", "binding_markdown",
         "page_url", "pending_count", "needs_reassign", "feishu_table_url", "status_mapping",
         "talent_id", "audit_advice", "audit_action", "workbench_type", "published_at",
-        "field_id", "project_id",
+        "field_id", "project_id", "missing_views", "draft_after_publish",
     }
     unknown = set()
     for doc in _docs():

@@ -22,7 +22,7 @@ EXPECTED_TOOLS = {
     "check_readiness", "validate_config", "get_workflows", "wait_workflows",
     "get_reference_configs", "get_field_groups", "suggest_draft", "set_enqueue_views",
     "ensure_app_collaborator", "pre_publish_checklist", "created_workflows",
-    "enable_workflows", "check_auditor_binding",
+    "enable_workflows", "check_auditor_binding", "onboard_status",
 }
 
 
