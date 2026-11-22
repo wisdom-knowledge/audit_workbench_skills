@@ -6,24 +6,36 @@
 
 | Skill | 用途 |
 |---|---|
+| [audit-workbench-onboard](skills/audit-workbench-onboard/SKILL.md) | 项目接入审核工作台：配置推荐、发布、工作流启用、审核员绑定与交付 |
 | [audit-workbench-enqueue-workflow](skills/audit-workbench-enqueue-workflow/SKILL.md) | 在飞书多维表格上按轮创建审核工作台入队工作流 |
+
+`audit-workbench-onboard` 不依赖 enqueue-workflow skill，也不会调用它的脚本。
 
 ## 安装
 
-本机只装入口。之后每次用 skill 都会从 GitHub `main` 拉最新正文，不必再 `git pull`。
+两个 skill 各自独立安装。
+
+`audit-workbench-onboard` 直接把完整目录软链到本机，改仓库立即生效；它还需要本机注册了
+`audit-workbench` MCP，见 [audit_workbench_mcp/README.md](audit_workbench_mcp/README.md)。
+
+```bash
+python3 skills/audit-workbench-onboard/scripts/install.py
+```
+
+`audit-workbench-enqueue-workflow` 装的是 fetch-on-use 入口，每次用会从 GitHub `main` 拉最新正文：
 
 ```bash
 git clone git@github.com:wisdom-knowledge/audit_workbench_skills.git
 python3 skills/audit-workbench-enqueue-workflow/scripts/install.py
 ```
 
-已装过旧版的人再跑一次 `install.py` 换成入口。安装后下一轮对话再生效。API Key 只放本机 `~/.agents/secrets/`，不要写入仓库。
-
-开发者链到本仓库（不拉远程）：
+开发者把 enqueue skill 链到本仓库（不拉远程）：
 
 ```bash
 python3 skills/audit-workbench-enqueue-workflow/scripts/install.py --local
 ```
+
+安装后下一轮对话再生效。API Key 只放本机 `~/.agents/secrets/`，不要写入仓库。
 
 ## 如何触发
 

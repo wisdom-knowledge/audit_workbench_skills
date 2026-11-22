@@ -1,0 +1,6 @@
+interface:
+  display_name: "审核工作台项目接入"
+  short_description: "从项目 ID 和底表链接完成审核工作台配置推荐、发布与交接"
+  default_prompt: "Use $audit-workbench-onboard to onboard a project's audit workbench: recommend a draft config, publish, enable workflows, and check auditor bindings."
+policy:
+  allow_implicit_invocation: true
