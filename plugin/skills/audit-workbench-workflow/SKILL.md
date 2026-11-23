@@ -9,8 +9,7 @@ description: >
 
 先读 [通用规则](../audit-workbench/references/rules.md)。环境和项目 ID 按入口的「定位项目」取得。
 
-工作流由后端 Worker 按已发布配置创建和更新，这里不手工建，也不调用
-`audit-workbench-enqueue-workflow` 的脚本。项目没有已发布版本时没有工作流可查，告诉用户先发布。
+工作流由后端 Worker 按已发布配置创建和更新，这里不在飞书上手工建。项目没有已发布版本时没有工作流可查，告诉用户先发布。
 
 ## 按目标处理
 

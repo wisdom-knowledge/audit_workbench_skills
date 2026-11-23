@@ -54,8 +54,7 @@ def _error(resp: dict[str, Any]) -> str:
 
 
 def ensure_app_collaborator(app_token: str, runner: Runner = _run) -> dict[str, Any]:
-    """Make 人才招聘 a full_access collaborator of the base. Copied from the enqueue
-    skill's ensure_app_collaborator.py and owned here.
+    """Make 人才招聘 a full_access collaborator of the base.
 
     Returns {"ok": True, "action": "present" | "added" | "upgraded"} or
     {"ok": False, "reason": ..., "message": ...}.

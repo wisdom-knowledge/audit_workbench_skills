@@ -1,7 +1,7 @@
 # audit_workbench_skills
 
 审核工作台 skills 集合。入口技能、五个子技能和管理端 MCP 打包成 `audit-workbench` 插件，放在
-`plugin/` 下；`audit-workbench-enqueue-workflow` 在 `skills/` 下单独维护和安装。
+`plugin/` 下。
 
 ## Skills
 
@@ -13,9 +13,6 @@
 | [audit-workbench-workflow](plugin/skills/audit-workbench-workflow/SKILL.md) | 查工作流同步状态、重试失败轮次、模版二人工修补、启用 |
 | [audit-workbench-auditors](plugin/skills/audit-workbench-auditors/SKILL.md) | 增删审核员，检查飞书账号绑定 |
 | [audit-workbench-ops](plugin/skills/audit-workbench-ops/SKILL.md) | 按 record_id 排查记录为什么没进专家端、提交后飞书为什么没变 |
-| [audit-workbench-enqueue-workflow](skills/audit-workbench-enqueue-workflow/SKILL.md) | 在飞书多维表格上按轮创建审核工作台入队工作流（不在插件里） |
-
-插件里的技能不依赖 enqueue-workflow skill，也不会调用它的脚本。
 
 ## 安装插件
 
@@ -49,7 +46,7 @@ Claude Code 里也可以直接：
 
 以前用 `install.py` 软链到 `~/.agents/skills/` 并手工注册 MCP 的，装插件后会出现两份技能和两个
 MCP。确认插件可用后再清理旧的：删掉 `~/.agents/skills/` 等目录里指向本仓库的 `audit-workbench*`
-软链（`audit-workbench-enqueue-workflow` 除外），并移除手工注册的 MCP，例如
+软链，并移除手工注册的 MCP，例如
 `claude mcp remove audit-workbench`。不要删本仓库。
 
 ## 发布新版本
@@ -76,21 +73,9 @@ claude plugin validate ../..
 python3 plugin/skills/audit-workbench/scripts/install.py
 ```
 
-## audit-workbench-enqueue-workflow
+## 已删除的 audit-workbench-enqueue-workflow
 
-装的是 fetch-on-use 入口，每次用会从 GitHub `main` 拉最新正文：
-
-```bash
-git clone git@github.com:wisdom-knowledge/audit_workbench_skills.git
-python3 skills/audit-workbench-enqueue-workflow/scripts/install.py
-```
-
-开发者把 enqueue skill 链到本仓库（不拉远程）：
-
-```bash
-python3 skills/audit-workbench-enqueue-workflow/scripts/install.py --local
-```
-
-安装后下一轮对话再生效。API Key 只放本机 `~/.agents/secrets/`，不要写入仓库。
-
-触发方式：点名 `$audit-workbench-enqueue-workflow`，或把飞书底表 URL 和「入队工作流」放在同一句。
+旧的 `audit-workbench-enqueue-workflow` skill 已删除：入队工作流现在由发布后的后端 Worker 创建，用插件里的
+工作流子技能查看、重试和启用。以前装过它的，删掉 `~/.agents/skills/audit-workbench-enqueue-workflow`
+以及其他客户端 skills 目录里指向它的软链即可。它的 fetch-on-use 入口会从 GitHub `main` 拉正文，
+删除合入 `main` 后入口就拉不到内容了。

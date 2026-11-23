@@ -12,4 +12,5 @@
 - 排障：`trace` 按 record_id 沿依赖链给出卡点；提交后判断结合审核日志、`task_submit` 事件和飞书当前值，
   结论待定时用 aliyun CLI 查 SLS 运行日志。
 - 新增 `check_setup`：检查管理端登录态、lark-cli 用户身份和阿里云日志读权限，并返回版本。
-- 不包含 `audit-workbench-enqueue-workflow`，它仍按原方式单独安装。
+- 删除旧的 `audit-workbench-enqueue-workflow` skill。入队工作流改由发布后的后端 Worker 创建，
+  在插件里用工作流子技能查看、重试和启用。

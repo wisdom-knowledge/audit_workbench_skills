@@ -1,7 +1,6 @@
 # 通用规则
 
-所有子技能都按这份执行。工具全部来自 `audit-workbench` MCP，随插件安装，安装与更新见 [安装](install.md)。`audit-workbench-enqueue-workflow`
-skill 不参与，也不要调用它的脚本。
+所有子技能都按这份执行。工具全部来自 `audit-workbench` MCP，随插件安装，安装与更新见 [安装](install.md)。
 
 ## 写操作
 
