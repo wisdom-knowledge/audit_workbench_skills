@@ -22,6 +22,9 @@ python3 skills/audit-workbench/scripts/install.py --dry-run
 - `lark-cli` 已安装，当前用户已登录。MCP 在设置协作者、读字段分组、读写工作流状态时以用户身份
   调用它。
 - 使用者对目标底表有管理权限，否则 `ensure_app_collaborator` 会失败。
+- 可选：`aliyun` CLI 已配置，且对日志服务 project `k8s-log-c32adc70c4c89414982ad277c336722a5` 有读权限
+  （`AliyunLogReadOnlyAccess` 即可）。排障时 `trace` 用它查后端运行日志；没有时这一步标「未核验」，
+  其他功能不受影响。
 - 有对应环境的管理员登录态。失效时 MCP 返回 `unauthorized`，由 `login` 工具重新登录。
 
 ## 检查安装

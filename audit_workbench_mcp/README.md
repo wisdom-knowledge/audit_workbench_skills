@@ -33,7 +33,7 @@
 | `enable_workflows` | lark-cli `+workflow-enable`，模版二审核操作工作流修补后才启用 | 写 |
 | `check_auditor_binding` | `GET .../auditors/feishu-binding` | 读 |
 | `onboard_status` | 并发读 editor、workflows、auditors、feishu-binding，已发布时再用 lark-cli 回读工作流状态，判断接入阶段 | 读 |
-| `trace` | `GET .../audit-workbench/trace`，再用 lark-cli 回读该轮入队工作流是否启用，给出卡点与证据 | 读 |
+| `trace` | `GET .../audit-workbench/trace`，再用 lark-cli 回读该轮入队工作流是否启用；提交后结论待定时用 aliyun CLI 按 record_id 查 SLS 运行日志，给出卡点与证据 | 读 |
 
 ### 推荐配置
 

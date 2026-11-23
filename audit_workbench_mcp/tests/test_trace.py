@@ -94,3 +94,94 @@ def test_render_submit_section_and_action_column() -> None:
     assert "**提交后**" in text and "下一步：查审核操作工作流" in text
     assert "最近一次提交改了：审核操作：空 → 通过" in text and "仅供参考" in text
     assert "| 1 | 待审核 | 待审核 | 是 | 无筛选，按状态 | 通过 |" in text
+
+
+def _log(minute: int, message: str) -> dict[str, Any]:
+    from datetime import datetime
+
+    from audit_workbench_mcp import sls
+    return {"time": datetime(2026, 11, 23, 10, minute, tzinfo=sls.BEIJING), "level": "INFO",
+            "logger": "x", "message": message, "traceId": f"t{minute}"}
+
+
+def _data(result: str, submit_at: str | None = None) -> dict[str, Any]:
+    last = {"time": submit_at} if submit_at else None
+    return {"stage": 1, "tasks": [{"stage": 1, "createdAt": "2026-11-23T09:00:00"}],
+            "submit": {"result": result, "message": "m", "next": "n", "lastSubmit": last}}
+
+
+def test_log_since_uses_task_created_at() -> None:
+    assert tr.log_since(_data("not_submitted")).hour == 9
+
+
+def test_writeback_failure_in_logs_becomes_certain() -> None:
+    data = _data("not_submitted")
+    tr.apply_logs(data, {"ok": True, "logs": [
+        _log(5, "更新记录失败: record_id=rec1, FieldNameNotFound body={}"),
+        _log(1, "audit_workbench submit project=1 record=rec1 written=[]"),
+    ]})
+    sub = data["submit"]
+    assert sub["result"] == "writeback_failed" and "FieldNameNotFound" in sub["message"]
+    assert [r["kind"] for r in sub["logs"]] == ["write_failed", "submit_ok"]
+
+
+def test_not_submitted_with_success_or_nothing_in_logs() -> None:
+    data = _data("not_submitted")
+    tr.apply_logs(data, {"ok": True, "logs": [_log(5, "audit_workbench submit(action) record=rec1 written=[]")]})
+    assert data["submit"]["result"] == "not_submitted" and "task_submit 没记上" in data["submit"]["logNote"]
+    data = _data("not_submitted")
+    tr.apply_logs(data, {"ok": True, "logs": []})
+    assert "没有这条记录的提交" in data["submit"]["logNote"]
+
+
+def test_enqueue_calls_after_submit_only() -> None:
+    data = _data("enqueue_not_returned", "2026-11-23T10:03:00")
+    tr.apply_logs(data, {"ok": True, "logs": [_log(1, "audit_workbench enqueue created record=rec1")]})
+    assert "没有提交之后的入队调用" in data["submit"]["logNote"]
+    data = _data("enqueue_not_returned", "2026-11-23T10:03:00")
+    tr.apply_logs(data, {"ok": True, "logs": [
+        _log(6, "audit_workbench enqueue ignored WORKBENCH_PAUSED project=1 record=rec1"),
+        _log(4, "audit_workbench submit skipped project=1 record=rec1 skipped=['fldNote']"),
+    ]})
+    note = data["submit"]["logNote"]
+    assert "WORKBENCH_PAUSED" in note and "fldNote" in note
+
+
+def test_unreadable_logs_are_unverified_and_rendered() -> None:
+    data = _data("log_missing")
+    tr.apply_logs(data, {"ok": False, "message": "本机没有安装 aliyun CLI"})
+    assert data["submit"]["logNote"] == "运行日志未核验：本机没有安装 aliyun CLI"
+    data = _data("not_submitted")
+    tr.apply_logs(data, {"ok": True, "logs": [_log(5, "更新记录失败: record_id=rec1 a|b")]})
+    checks = [{"key": "task", "label": "任务已建", "state": "pass", "evidence": "已存在", "next": None}]
+    text = tr.render({**data, "recordId": "rec1", "checks": checks, "diagnosis": tr.diagnose(checks), "feishu": {}})
+    assert "| 2026-11-23 10:05:00 | 更新记录失败: record_id=rec1 a/b | t5 |" in text
+
+
+def test_service_searches_logs_only_for_open_verdicts(monkeypatch: pytest.MonkeyPatch) -> None:
+    from audit_workbench_mcp import sls
+
+    calls: list[tuple[Any, ...]] = []
+
+    def fake_search(*args: Any) -> dict[str, Any]:
+        calls.append(args)
+        return {"ok": True, "logs": []}
+
+    monkeypatch.setattr(sls, "search_record", fake_search)
+    for result, expect in (("not_submitted", 1), ("ok", 0)):
+        calls.clear()
+        payload = {"recordId": "rec1", "stage": 1, "dataUrl": "", "checks": [],
+                   "diagnosis": {"result": "all_pass", "step": None, "label": None, "message": "", "next": None},
+                   "workflows": {}, "feishu": {"ok": True, "rounds": []},
+                   "tasks": [{"stage": 1, "createdAt": "2026-11-23T09:00:00"}],
+                   "submit": {"result": result, "message": "m", "next": None, "lastSubmit": None}}
+
+        def handler(request: httpx.Request, payload: dict[str, Any] = payload) -> httpx.Response:
+            return httpx.Response(200, json={"status_code": 0, "status_msg": "success", "data": payload})
+
+        store = TokenStore(sources=(lambda _e: "tok",), capture=lambda *a, **k: "tok")
+        service = AuditWorkbenchService(AdminClient(store, transport=httpx.MockTransport(handler), retry_delay=0))
+        asyncio.run(service.trace("prod", 7, "rec1"))
+        assert len(calls) == expect
+        if expect:
+            assert calls[0][0] == "prod" and calls[0][1] == "rec1"

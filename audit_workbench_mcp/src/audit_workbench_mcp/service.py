@@ -14,7 +14,7 @@ import asyncio
 from datetime import datetime, timezone
 from typing import Any
 
-from . import draft_builder, errors, field_groups, handoff, lark, onboard_status, readiness, references, report
+from . import draft_builder, errors, field_groups, handoff, lark, onboard_status, readiness, references, report, sls
 from . import trace as trace_mod
 from .client import AdminClient
 from .envs import get_env
@@ -743,7 +743,8 @@ class AuditWorkbenchService:
         talent_id: int | None = None,
         stage: int | None = None,
     ) -> dict[str, Any]:
-        """Backend record trace, plus the Feishu enabled state of that round's enqueue workflow."""
+        """Backend record trace, plus the Feishu enabled state of that round's enqueue workflow and,
+        for post-submit verdicts the platform cannot settle, the backend run logs in SLS."""
         params = {"record_id": record_id, "talent_id": talent_id, "stage": stage}
         data = await self._client.request(
             get_env(env), "GET", f"/admin/projects/{project_id}/audit-workbench/trace", params=params
@@ -757,6 +758,12 @@ class AuditWorkbenchService:
             state = await asyncio.to_thread(lark.get_workflow, app_token, check["workflowId"])
             trace_mod.apply_workflow_state(data["checks"], state)
             data["diagnosis"] = trace_mod.diagnose(data["checks"], data.get("dataUrl") or "")
+        submit = data.get("submit") or {}
+        if submit.get("result") in trace_mod.LOG_RESULTS:
+            found = await asyncio.to_thread(
+                sls.search_record, env, record_id, trace_mod.log_since(data)
+            )
+            trace_mod.apply_logs(data, found)
         return self._ok(env, project_id, data, trace_markdown=trace_mod.render(data))
 
     async def check_auditor_binding(

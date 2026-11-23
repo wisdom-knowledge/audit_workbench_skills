@@ -4,9 +4,10 @@ verdict with the same rule as the backend, and render a short report.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
-from . import handoff
+from . import handoff, sls
 
 PASS, FAIL, UNVERIFIED, SKIP = "pass", "fail", "unverified", "skip"
 _ICON = {PASS: "✅", FAIL: "❌", UNVERIFIED: "❔", SKIP: "➖"}
@@ -49,6 +50,94 @@ def diagnose(checks: list[dict[str, Any]], data_url: str = "") -> dict[str, Any]
     }
 
 
+# 提交后判断里这几种结论，运行日志能补上平台没落库的证据
+LOG_RESULTS = {"not_submitted", "log_missing", "action_workflow_half", "enqueue_not_returned"}
+EVIDENCE_LIMIT = 12
+
+
+def _kind(message: str) -> str:
+    if message.startswith("audit_workbench submit skipped"):
+        return "skipped"
+    if message.startswith("audit_workbench submit"):
+        return "submit_ok"
+    if message.startswith(("更新记录失败", "更新记录时发生错误")):
+        return "write_failed"
+    if message.startswith("audit_workbench review_log write failed"):
+        return "review_log_failed"
+    if message.startswith("audit_workbench review_log written"):
+        return "review_log"
+    if message.startswith("audit_workbench enqueue"):
+        return "enqueue"
+    if message.startswith("audit_workbench advance"):
+        return "advance"
+    return "other"
+
+
+def _as_time(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        t = value
+    else:
+        try:
+            t = datetime.fromisoformat(str(value))
+        except ValueError:
+            return None
+    return t if t.tzinfo else t.replace(tzinfo=sls.BEIJING)
+
+
+def _fmt(t: datetime) -> str:
+    return t.astimezone(sls.BEIJING).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def log_since(data: dict[str, Any]) -> datetime | None:
+    """Search window start: when the round's task was created."""
+    task = next((t for t in data.get("tasks") or [] if t.get("stage") == data.get("stage")), None)
+    return _as_time(task.get("createdAt")) if task else None
+
+
+def apply_logs(data: dict[str, Any], found: dict[str, Any]) -> None:
+    """Fold SLS log lines into data["submit"]: notes, evidence, and writeback_failed when certain."""
+    submit = data.get("submit")
+    if not submit:
+        return
+    if not found.get("ok"):
+        submit["logNote"] = f"运行日志未核验：{found.get('message') or '未知原因'}"
+        return
+    logs = [{**row, "kind": _kind(row["message"])} for row in found.get("logs") or []]
+    submit["logs"] = [row for row in logs if row["kind"] != "other"][:EVIDENCE_LIMIT]
+    after = _as_time((submit.get("lastSubmit") or {}).get("time"))
+    by_kind: dict[str, list[dict[str, Any]]] = {}
+    for row in logs:  # 新的在前
+        by_kind.setdefault(row["kind"], []).append(row)
+    notes: list[str] = []
+
+    fails, oks = by_kind.get("write_failed") or [], by_kind.get("submit_ok") or []
+    result = submit["result"]
+    if result == "not_submitted":
+        if fails and (not oks or fails[0]["time"] > oks[0]["time"]):
+            submit["result"] = "writeback_failed"
+            submit["message"] = f"运行日志显示 {_fmt(fails[0]['time'])} 回写飞书失败：{fails[0]['message']}"
+            submit["next"] = "按报错原因处理后，请审核员在专家端重新提交"
+        elif oks:
+            notes.append(f"运行日志显示 {_fmt(oks[0]['time'])} 提交已回写飞书成功，只是 task_submit 没记上")
+        else:
+            notes.append("运行日志里没有这条记录的提交和回写：审核员没提交过，或提交在校验阶段就被拒了（专家端会提示原因）")
+    if result == "log_missing" and by_kind.get("review_log_failed"):
+        row = by_kind["review_log_failed"][0]
+        notes.append(f"运行日志显示 {_fmt(row['time'])} 写审核日志失败（trace_id {row['traceId']}）")
+    if result in ("enqueue_not_returned", "action_workflow_half"):
+        calls = [r for r in by_kind.get("enqueue") or [] if after is None or r["time"] >= after]
+        if calls:
+            notes.append(f"提交后入队接口被调用过，最近一次 {_fmt(calls[0]['time'])}：{calls[0]['message']}")
+        else:
+            notes.append("运行日志里没有提交之后的入队调用：入队工作流没有调用平台")
+    skipped = [r for r in by_kind.get("skipped") or [] if after is None or r["time"] >= after]
+    if skipped:
+        notes.append(f"这次提交有字段没回写飞书：{skipped[0]['message']}")
+    if found.get("truncated"):
+        notes.append(f"只看了最近 {sls.LINE_LIMIT} 条日志")
+    submit["logNote"] = "；".join(notes)
+
+
 def _round_rows(rounds: list[dict[str, Any]]) -> list[str]:
     # 模版二多一列飞书当前的审核操作值
     action = any("actionValue" in r for r in rounds)
@@ -80,6 +169,13 @@ def _submit_lines(submit: dict[str, Any] | None) -> list[str]:
     if diff:
         changes = "；".join(f"{k}：{v.get('from') or '空'} → {v.get('to') or '空'}" for k, v in diff.items())
         lines += ["", f"最近一次提交改了：{changes}"]
+    if submit.get("logNote"):
+        lines += ["", submit["logNote"]]
+    if submit.get("logs"):
+        lines += ["", "| 时间 | 运行日志 | trace_id |", "|-|-|-|"]
+        for row in submit["logs"]:
+            text = row["message"].replace("|", "/")[:160]
+            lines.append(f"| {_fmt(row['time'])} | {text} | {row['traceId']} |")
     if submit.get("viewNote"):
         lines += ["", submit["viewNote"]]
     return lines
