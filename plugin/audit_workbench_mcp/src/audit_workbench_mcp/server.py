@@ -38,7 +38,9 @@ b. get_reference_configs 取参考项目。按分组和语义判断轮次数，�
      "roles":{"status|reviewer|talent_id|audit_advice|audit_action":{"field_id":"…","basis":"exact|semantic|none","reason":"…"}},
      "status_mapping":{"<飞书选项>":{"target":"<平台状态>","basis":"exact|semantic|none","reason":"…"}}}]}
    fields 只放本底表里的字段；名称相同才算 exact，凭语义判断的一律 semantic。
-c. suggest_draft 保存草稿，把 report_markdown 原样展示给用户。
+c. suggest_draft 保存草稿。推荐配置分三步确认，每步只展示一段、等用户确认后再进下一步：
+   2.1 report_markdown（展示字段）→ 2.2 mapping_markdown（字段映射和状态枚举映射）→ 2.3 views_markdown（入队视图链接）。
+   mappings_to_confirm=false 时 2.2 只展示结论，不等用户确认。
 d. 用户给出视图链接后调用 set_enqueue_views；要改字段或映射时，get_editor 读草稿后用 save_draft 保存。
 
 发布与交接：
@@ -311,7 +313,7 @@ async def get_field_groups(
     return await _service.get_field_groups(env, app_token, table_id)
 
 
-@_tool("推荐配置第 3 步：按对齐表组装草稿并保存，返回 report_markdown（原样展示给用户）和配置页链接。计票、置信度、布局都由工具按规则计算。项目没有草稿时直接保存；已有草稿时只返回预览，用户同意覆盖后带 confirm=true 再调用。alignment 格式见工具 instructions。")
+@_tool("推荐配置第 3 步：按对齐表组装草稿并保存，返回三段依次展示的文本：report_markdown（2.1 展示字段）、mapping_markdown（2.2 字段映射和状态枚举映射）、views_markdown（2.3 入队视图链接），以及配置页链接。每段等用户确认后再展示下一段。计票、置信度、布局都由工具按规则计算。项目没有草稿时直接保存；已有草稿时只返回预览，用户同意覆盖后带 confirm=true 再调用。alignment 格式见工具 instructions。")
 async def suggest_draft(
     env: EnvArg,
     project_id: ProjectIdArg,

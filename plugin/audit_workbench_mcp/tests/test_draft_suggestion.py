@@ -302,13 +302,24 @@ def test_report_part_one_sorted_by_area_with_markers() -> None:
     assert "| 审核状态 | 🟧 审核操作 | 🔵 可编辑 |" in text
 
 
-def test_report_part_two_lists_only_unresolved_and_low() -> None:
+def _mappings(data: dict | None = None) -> str:
+    return report.render_mappings(report=data or build()["report"], page_url="https://admin/p/1234")
+
+
+def test_field_step_asks_only_about_fields() -> None:
     text = _render()
-    part2 = text.split("**二、需要确认的字段映射**")[1].split("---")[0]
-    assert "| 🔴 状态「搁置」 | 请从 7 个平台状态中选一个 |" in part2
-    assert "| 🟡 talent_id 字段 | 一审人员ID | 参考项目叫「一轮审核员talent_id」 |" in part2
-    assert "低置信" not in part2
-    assert "审核状态字段" not in part2 and "「待审核」" not in part2 and "「打回」" not in part2
+    assert "**2.1 确认展示的字段**" in text and "展示的字段需要调整吗？" in text
+    assert "需要确认的字段映射" not in text and "入队" not in text.split("**2.1")[1]
+
+
+def test_mapping_step_lists_only_unresolved_and_to_confirm() -> None:
+    text = _mappings()
+    assert text.startswith("**2.2 确认字段映射和状态枚举映射**")
+    assert "| 🔴 状态「搁置」 | 请从 7 个平台状态中选一个 |" in text
+    assert "| 🟡 talent_id 字段 | 一审人员ID | 参考项目叫「一轮审核员talent_id」 |" in text
+    assert "低置信" not in text
+    assert "审核状态字段" not in text and "「待审核」" not in text and "「打回」" not in text
+    assert "🔴 的项请给出选择" in text
 
 
 def _info(name: str, confidence: str, reason: str = "") -> dict[str, str]:
@@ -331,40 +342,46 @@ def _two_round_report() -> dict:
     }
 
 
-def test_report_part_two_splits_rounds_and_puts_unresolved_first() -> None:
-    text = report.render_report(report=_two_round_report(), env="prod", project_id=9,
-                                page_url="https://admin/p/9", saved=True)
-    part2 = text.split("**二、需要确认的字段映射**")[1].split("---")[0]
-    one, two = part2.split("**轮次二**")
+def test_mapping_step_splits_rounds_and_puts_unresolved_first() -> None:
+    text = _mappings(_two_round_report())
+    one, two = text.split("**轮次二**")
     assert "**轮次一**" in one and "轮次二" not in one
     # 每轮内：没推荐出来的在前，系统推荐待确认的在后
     assert one.index("🔴 **没推荐出来") < one.index("🟡 系统自动推荐出来但是需要你确认（")
     assert "| 🔴 状态「搁置」 |" in one and "| 🟡 talent_id 字段 | 一审ID | 按语义推断 |" in one
     assert "| 🔴 审核人字段 | 参考项目里没有对应字段 |" in two
     assert "| 🟡 状态「复核中」 | 其他 | 按语义推断 |" in two
-    assert "初审状态" not in part2
+    assert "初审状态" not in text
 
 
-def test_report_round_without_open_items_says_so() -> None:
+def test_mapping_step_round_without_open_items_says_so() -> None:
     data = _two_round_report()
     data["rounds"][1]["roles"], data["rounds"][1]["status_mapping"] = {}, {}
-    text = report.render_report(report=data, env="boe", project_id=9, page_url="u", saved=True)
-    assert "**轮次二**\n\n本轮没有需要确认的映射。" in text
+    assert "**轮次二**\n\n本轮没有需要确认的映射。" in _mappings(data)
+
+
+def test_mapping_step_with_nothing_to_confirm() -> None:
+    data = _two_round_report()
+    for r in data["rounds"]:
+        r["roles"], r["status_mapping"] = {}, {}
+    text = _mappings(data)
+    assert report.has_mappings_to_confirm(data) is False
+    assert "没有需要单独确认的项" in text and "请给出选择" not in text
 
 
 def test_saved_report_puts_config_link_in_a_callout() -> None:
     url = "https://admin-test.meetchances.com/projects/1234/audit-workbench?step=1"
     saved = _render()
     assert f"> 👉 **管理端配置页：草稿已保存，可以打开核对和修改**\n>\n> **{url}**" in saved
-    assert saved.index(url) < saved.index("**一、推荐的展示字段**")
+    assert saved.index(url) < saved.index("**2.1 确认展示的字段**")
     preview = _render(saved=False)
-    assert "> 👉" not in preview and f"配置页：{url}" in preview
+    assert "尚未保存" in preview and "> 👉" not in preview and f"配置页：{url}" in preview
 
 
-def test_report_asks_three_questions_per_round() -> None:
-    text = _render(saved=False)
-    assert "尚未保存" in text
-    assert "3. 请给出每一轮的入队条件（视图链接）：\n   - 轮次一：" in text
+def test_views_step_lists_every_round() -> None:
+    text = report.render_views_prompt(report=_two_round_report())
+    assert text.startswith("**2.3 给出每一轮的入队条件**")
+    assert text.endswith("- 轮次一：\n- 轮次二：")
 
 
 # ---- service: save rules -------------------------------------------------------------
@@ -422,6 +439,9 @@ def test_no_draft_saves_directly() -> None:
     parse = json.loads(next(c for c in calls if c.url.path.endswith("/parse-feishu")).content)
     assert parse == {"table_url": "https://x.feishu.cn/base/app?table=tbl", "project_id": 1234}
     assert out["page_url"] == "https://admin-test.meetchances.com/projects/1234/audit-workbench?step=1"
+    # 2.2、2.3 的文本随结果一起返回，由技能在用户确认上一步后再展示
+    assert out["mapping_markdown"].startswith("**2.2 ") and isinstance(out["mappings_to_confirm"], bool)
+    assert out["views_markdown"].startswith("**2.3 ") and "需要确认的字段映射" not in out["report_markdown"]
 
 
 def test_existing_draft_previews_then_overwrites_on_confirm() -> None:

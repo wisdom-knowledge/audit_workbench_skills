@@ -28,7 +28,7 @@ metadata:
 | 阶段 | 进入条件 | 执行前完整读取 |
 |-|-|-|
 | 1 识别与初始化 | 有环境、项目 ID、底表链接 | [init.md](references/init.md) |
-| 2 推荐配置 | 初始化完成 | [alignment.md](references/alignment.md)、[draft.md](references/draft.md) |
+| 2 推荐配置（2.1 字段 → 2.2 映射 → 2.3 入队条件，逐步确认） | 初始化完成 | [alignment.md](references/alignment.md)、[draft.md](references/draft.md) |
 | 3 发布前确认 | 草稿已保存，每轮入队视图都已写入 | [publish.md](../audit-workbench-config/references/publish.md) |
 | 4 工作流交接 | 发布完成 | [handoff.md](../audit-workbench-workflow/references/handoff.md) |
 | 5 审核员 | 工作流全部启用 | [审核员](../audit-workbench-auditors/SKILL.md) 的「添加」和「检查飞书绑定」 |

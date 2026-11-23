@@ -58,7 +58,7 @@ MCP。确认插件可用后再清理旧的：删掉 `~/.agents/skills/` 等目�
 
 ```bash
 cd plugin/audit_workbench_mcp && uv run pytest
-python3 ../skills/audit-workbench/scripts/test_skills.py
+uv run pytest ../skills/audit-workbench/scripts/test_skills.py
 claude plugin validate ../..
 ```
 

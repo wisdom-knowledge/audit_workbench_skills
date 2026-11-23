@@ -560,6 +560,7 @@ class AuditWorkbenchService:
             return {
                 "ok": True, "preview": True, "executed": False, "env": env,
                 "project_id": project_id, "report_markdown": text,
+                **self._later_steps(built["report"], env, project_id),
                 "impact": f"会覆盖现有草稿（更新于 {current['draft_updated_at']}）",
                 "next": "用户同意覆盖后，带 confirm=true 再次调用"
                 + (f"，并传 confirm_project_id={project_id}" if target.name == "prod" else ""),
@@ -583,7 +584,19 @@ class AuditWorkbenchService:
             report=built["report"], env=env, project_id=project_id,
             page_url=self.page_url(env, project_id), saved=True,
         )
-        return {**saved, "report_markdown": text, "page_url": self.page_url(env, project_id)}
+        return {
+            **saved, "report_markdown": text, "page_url": self.page_url(env, project_id),
+            **self._later_steps(built["report"], env, project_id),
+        }
+
+    def _later_steps(self, built_report: dict[str, Any], env: str, project_id: int) -> dict[str, Any]:
+        """Messages for steps 2.2 and 2.3; shown one at a time after the field set is confirmed."""
+        page = self.page_url(env, project_id)
+        return {
+            "mapping_markdown": report.render_mappings(report=built_report, page_url=page),
+            "mappings_to_confirm": report.has_mappings_to_confirm(built_report),
+            "views_markdown": report.render_views_prompt(report=built_report),
+        }
 
     async def set_enqueue_views(
         self,
@@ -737,7 +750,8 @@ class AuditWorkbenchService:
         rows = await self._workflow_rows(workflows) if published and not editor.get("draft") else []
         count = int((auditors.get("summary") or {}).get("auditor_count") or auditors.get("count") or 0)
         result = onboard_status.judge(editor, workflows, rows, count, binding.get("items") or [])
-        return self._ok(env, project_id, result, summary=snapshot_from_editor(editor))
+        return self._ok(env, project_id, result, summary=snapshot_from_editor(editor),
+                        page_url=self.page_url(env, project_id))
 
     async def trace(
         self,

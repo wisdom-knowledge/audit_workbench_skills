@@ -1,10 +1,10 @@
 """Render the draft suggestion as the agreed terminal report (Markdown).
 
-Part 1 lists every recommended field per round, all taken from the project's own
-base. Part 2 lists, round by round, the mappings that were not resolved (first,
-red) and the ones recommended by inference that the user should confirm (yellow).
-The report ends by asking the user to check both parts and give each round's
-enqueue view link.
+Step 2 of onboarding is confirmed in three parts, one message each:
+2.1 the recommended fields per round, all taken from the project's own base;
+2.2 round by round, the role and status mappings that were not resolved (first,
+red) and the ones recommended by inference that the user should confirm (yellow);
+2.3 the enqueue view link of each round.
 """
 
 from __future__ import annotations
@@ -119,8 +119,8 @@ def render_report(
     project_id: int,
     page_url: str,
     saved: bool,
-    view_urls: dict[str, str] | None = None,
 ) -> str:
+    """Step 2.1: header, config page link and the recommended fields; asks about the field set only."""
     rounds = report["rounds"]
     refs = report["references"]
     head = "**推荐配置已保存为草稿**" if saved else "**推荐配置（尚未保存：项目已有草稿，确认覆盖后才会保存）**"
@@ -140,22 +140,50 @@ def render_report(
     else:
         lines += [f"配置页：{page_url}", ""]
     lines += [
-        "**一、推荐的展示字段**",
+        "**2.1 确认展示的字段**",
         "",
         f"以下字段都来自本项目底表（已解析 {report['base_field_count']} 列）。"
         "布局按这些字段生成，可在配置页第 3 步查看。",
         "",
     ]
     lines += _fields_section(rounds)
+    lines += [
+        "---",
+        "",
+        "**展示的字段需要调整吗？** 比如增减字段、修改展示位置或编辑权限。"
+        "可以在配置页改完保存，也可以在这里回复，我来更新草稿。没有要改的，回复「没问题」。",
+    ]
+    return "\n".join(lines)
 
-    lines += ["**二、需要确认的字段映射**", ""]
-    lines += _mapping_section(rounds)
-    lines += ["", "---", "", "**请核实以下三点：**", ""]
-    lines.append("1. 展示的字段集合需要调整吗？比如增减字段、修改展示位置或编辑权限。")
-    lines.append("2. 上面的字段映射需要调整吗？")
-    lines.append("3. 请给出每一轮的入队条件（视图链接）：")
-    for r in rounds:
-        url = (view_urls or {}).get(r["round_id"], "")
-        lines.append(f"   - {r['name']}：{url}")
-    lines += ["", f"可以直接在配置页修改并保存（{page_url}），也可以在这里回复，我来更新草稿。"]
+
+def has_mappings_to_confirm(report: dict[str, Any]) -> bool:
+    return any(u or low for u, low in (_round_mappings(r) for r in report["rounds"]))
+
+
+def render_mappings(*, report: dict[str, Any], page_url: str) -> str:
+    """Step 2.2: per round, unresolved mappings first, then the auto-recommended ones to confirm."""
+    lines = ["**2.2 确认字段映射和状态枚举映射**", ""]
+    lines += _mapping_section(report["rounds"])
+    if not has_mappings_to_confirm(report):
+        return "\n".join(lines)
+    lines += [
+        "",
+        "---",
+        "",
+        "**🔴 的项请给出选择，🟡 的项请确认推荐值是否正确。** 可以在配置页第 1 步修改"
+        f"（{page_url}），也可以在这里回复，我来更新草稿。",
+    ]
+    return "\n".join(lines)
+
+
+def render_views_prompt(*, report: dict[str, Any]) -> str:
+    """Step 2.3: ask for each round's enqueue view link."""
+    lines = [
+        "**2.3 给出每一轮的入队条件**",
+        "",
+        "请提供每一轮的入队视图链接（底表里筛选出「这一轮该进专家端」的记录的视图，链接里要有 "
+        "table= 和 view=）：",
+        "",
+    ]
+    lines += [f"- {r['name']}：" for r in report["rounds"]]
     return "\n".join(lines)

@@ -89,6 +89,7 @@ def test_service_reads_all_four_and_feishu_state(monkeypatch: pytest.MonkeyPatch
     out = asyncio.run(service.onboard_status("boe", 7))
     assert out["data"]["stage"] == 5 and out["data"]["binding"]["unbound"] == [5]
     assert len(calls) == 4
+    assert out["page_url"] == "https://admin-test.meetchances.com/projects/7/audit-workbench?step=1"
 
 
 def test_service_skips_feishu_reads_before_publish(monkeypatch: pytest.MonkeyPatch) -> None:

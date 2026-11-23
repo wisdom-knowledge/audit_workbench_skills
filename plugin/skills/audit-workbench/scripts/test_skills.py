@@ -59,7 +59,11 @@ def test_tool_names_exist_in_mcp():
         "page_url", "pending_count", "needs_reassign", "feishu_table_url", "status_mapping",
         "talent_id", "audit_advice", "audit_action", "workbench_type", "published_at",
         "field_id", "project_id", "missing_views", "draft_after_publish", "trace_markdown",
-        "all_pass", "record_id",
+        "all_pass", "record_id", "setup_markdown", "mapping_markdown", "views_markdown",
+        # trace 提交后判断的结论码和证据字段
+        "task_submit", "trace_id", "not_submitted", "log_missing", "feishu_changed",
+        "writeback_failed", "not_configured", "action_workflow_not_run", "action_not_cleared",
+        "enqueue_not_returned", "action_workflow_half",
     }
     unknown = set()
     for doc in _docs():
