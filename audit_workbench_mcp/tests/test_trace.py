@@ -76,3 +76,21 @@ def test_service_reads_enabled_state(monkeypatch: pytest.MonkeyPatch) -> None:
     assert seen[0].url.path.endswith("/projects/7/audit-workbench/trace")
     assert seen[0].url.params["record_id"] == "rec1" and "stage" not in seen[0].url.params
     assert out["data"]["diagnosis"]["step"] == "workflow" and "卡在：入队工作流已同步并启用" in out["trace_markdown"]
+
+
+def test_render_submit_section_and_action_column() -> None:
+    checks = [{"key": "task", "label": "任务已建", "state": "pass", "evidence": "已存在", "next": None}]
+    text = tr.render({
+        "recordId": "r", "stage": 1, "checks": checks, "diagnosis": tr.diagnose(checks),
+        "submit": {
+            "result": "action_workflow_not_run", "message": "审核操作列为「通过」，审核操作工作流没有跑",
+            "next": "查审核操作工作流", "viewNote": "专家端记录过 1 次看题（专家端上报，仅供参考）",
+            "lastSubmit": {"diff": {"审核操作": {"from": None, "to": "通过"}}},
+        },
+        "feishu": {"rounds": [{"stage": 1, "statusLabel": "待审核", "taskStatusLabel": "待审核",
+                               "consistent": True, "viewActive": False,
+                               "actionConfigured": True, "actionValue": "通过"}]},
+    })
+    assert "**提交后**" in text and "下一步：查审核操作工作流" in text
+    assert "最近一次提交改了：审核操作：空 → 通过" in text and "仅供参考" in text
+    assert "| 1 | 待审核 | 待审核 | 是 | 无筛选，按状态 | 通过 |" in text

@@ -365,7 +365,7 @@ async def onboard_status(env: EnvArg, project_id: ProjectIdArg) -> dict[str, Any
     return await _service.onboard_status(env, project_id)
 
 
-@_tool("排障：按 record_id 查一条记录为什么没进专家端、提交后飞书为什么没变。沿依赖链（配置发布→项目未暂停→上一轮通过→入队条件→工作流同步与启用→任务→分配→审核员名单）给出第一处不满足的环节、证据和下一步；每轮列出飞书当前状态与平台任务状态。把 trace_markdown 原样展示给用户。只读。")
+@_tool("排障：按 record_id 查一条记录为什么没进专家端、提交后飞书为什么没变。沿依赖链（配置发布→项目未暂停→上一轮通过→入队条件→工作流同步与启用→任务→分配→审核员名单）给出第一处不满足的环节、证据和下一步；本轮已有任务时另给提交后判断（按审核日志、task_submit 事件和飞书当前值，模版二含审核操作列）；每轮列出飞书当前状态与平台任务状态。把 trace_markdown 原样展示给用户。只读。")
 async def trace(
     env: EnvArg,
     project_id: ProjectIdArg,

@@ -50,17 +50,38 @@ def diagnose(checks: list[dict[str, Any]], data_url: str = "") -> dict[str, Any]
 
 
 def _round_rows(rounds: list[dict[str, Any]]) -> list[str]:
-    lines = ["| 轮次 | 飞书当前状态 | 平台任务状态 | 一致 | 入队条件 |", "|-|-|-|-|-|"]
+    # 模版二多一列飞书当前的审核操作值
+    action = any("actionValue" in r for r in rounds)
+    head = "| 轮次 | 飞书当前状态 | 平台任务状态 | 一致 | 入队条件 |" + (" 审核操作列 |" if action else "")
+    lines = [head, "|-|-|-|-|-|" + ("-|" if action else "")]
     for r in rounds:
         consistent = {True: "是", False: "**否**", None: "—"}[r.get("consistent")]
         if r.get("viewActive"):
             view = "满足" if r.get("viewMatched") else "**不满足**"
         else:
             view = "无筛选，按状态"
-        lines.append(
+        row = (
             f"| {r['stage']} | {r.get('statusLabel') or '空'} | {r.get('taskStatusLabel') or '无任务'} "
             f"| {consistent} | {view} |"
         )
+        if action:
+            row += f" {r.get('actionValue') or '空'} |" if r.get("actionConfigured") else " 未配置 |"
+        lines.append(row)
+    return lines
+
+
+def _submit_lines(submit: dict[str, Any] | None) -> list[str]:
+    if not submit:
+        return []
+    lines = ["", "**提交后**", "", submit["message"]]
+    if submit.get("next"):
+        lines += ["", f"下一步：{submit['next']}"]
+    diff = (submit.get("lastSubmit") or {}).get("diff") or {}
+    if diff:
+        changes = "；".join(f"{k}：{v.get('from') or '空'} → {v.get('to') or '空'}" for k, v in diff.items())
+        lines += ["", f"最近一次提交改了：{changes}"]
+    if submit.get("viewNote"):
+        lines += ["", submit["viewNote"]]
     return lines
 
 
@@ -77,6 +98,7 @@ def render(data: dict[str, Any]) -> str:
     lines += ["", "| 环节 | 结果 | 证据 |", "|-|-|-|"]
     for c in data["checks"]:
         lines.append(f"| {c['label']} | {_ICON[c['state']]} | {c['evidence']} |")
+    lines += _submit_lines(data.get("submit"))
     rounds = (data.get("feishu") or {}).get("rounds") or []
     if rounds:
         lines += ["", *_round_rows(rounds)]
