@@ -305,9 +305,60 @@ def test_report_part_one_sorted_by_area_with_markers() -> None:
 def test_report_part_two_lists_only_unresolved_and_low() -> None:
     text = _render()
     part2 = text.split("**二、需要确认的字段映射**")[1].split("---")[0]
-    assert "talent_id 字段 | 一审人员ID | 低置信：参考项目叫「一轮审核员talent_id」" in part2
-    assert "状态「搁置」 | **未推荐出**" in part2
+    assert "| 🔴 状态「搁置」 | 请从 7 个平台状态中选一个 |" in part2
+    assert "| 🟡 talent_id 字段 | 一审人员ID | 参考项目叫「一轮审核员talent_id」 |" in part2
+    assert "低置信" not in part2
     assert "审核状态字段" not in part2 and "「待审核」" not in part2 and "「打回」" not in part2
+
+
+def _info(name: str, confidence: str, reason: str = "") -> dict[str, str]:
+    return {"name": name, "target": name, "confidence": confidence, "reason": reason}
+
+
+def _two_round_report() -> dict:
+    def rnd(i: int, name: str, roles: dict, mapping: dict) -> dict:
+        return {"round_id": f"round-{i}", "name": name, "fields": [], "roles": roles, "status_mapping": mapping}
+    return {
+        "workbench_type": 1, "base_field_count": 9, "references": [{"project_id": 1}],
+        "rounds": [
+            rnd(1, "轮次一",
+                {"talent_id": _info("一审ID", "low", "按语义推断"), "status": _info("初审状态", "high")},
+                {"搁置": _info("", "unresolved")}),
+            rnd(2, "轮次二",
+                {"reviewer": _info("", "unresolved", "参考项目里没有对应字段")},
+                {"复核中": _info("其他", "low", "")}),
+        ],
+    }
+
+
+def test_report_part_two_splits_rounds_and_puts_unresolved_first() -> None:
+    text = report.render_report(report=_two_round_report(), env="prod", project_id=9,
+                                page_url="https://admin/p/9", saved=True)
+    part2 = text.split("**二、需要确认的字段映射**")[1].split("---")[0]
+    one, two = part2.split("**轮次二**")
+    assert "**轮次一**" in one and "轮次二" not in one
+    # 每轮内：没推荐出来的在前，系统推荐待确认的在后
+    assert one.index("🔴 **没推荐出来") < one.index("🟡 系统自动推荐出来但是需要你确认（")
+    assert "| 🔴 状态「搁置」 |" in one and "| 🟡 talent_id 字段 | 一审ID | 按语义推断 |" in one
+    assert "| 🔴 审核人字段 | 参考项目里没有对应字段 |" in two
+    assert "| 🟡 状态「复核中」 | 其他 | 按语义推断 |" in two
+    assert "初审状态" not in part2
+
+
+def test_report_round_without_open_items_says_so() -> None:
+    data = _two_round_report()
+    data["rounds"][1]["roles"], data["rounds"][1]["status_mapping"] = {}, {}
+    text = report.render_report(report=data, env="boe", project_id=9, page_url="u", saved=True)
+    assert "**轮次二**\n\n本轮没有需要确认的映射。" in text
+
+
+def test_saved_report_puts_config_link_in_a_callout() -> None:
+    url = "https://admin-test.meetchances.com/projects/1234/audit-workbench?step=1"
+    saved = _render()
+    assert f"> 👉 **管理端配置页：草稿已保存，可以打开核对和修改**\n>\n> **{url}**" in saved
+    assert saved.index(url) < saved.index("**一、推荐的展示字段**")
+    preview = _render(saved=False)
+    assert "> 👉" not in preview and f"配置页：{url}" in preview
 
 
 def test_report_asks_three_questions_per_round() -> None:

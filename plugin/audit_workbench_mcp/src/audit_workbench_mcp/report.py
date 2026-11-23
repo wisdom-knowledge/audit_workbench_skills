@@ -1,7 +1,8 @@
 """Render the draft suggestion as the agreed terminal report (Markdown).
 
 Part 1 lists every recommended field per round, all taken from the project's own
-base. Part 2 lists only mappings that were not resolved or are low confidence.
+base. Part 2 lists, round by round, the mappings that were not resolved (first,
+red) and the ones recommended by inference that the user should confirm (yellow).
 The report ends by asking the user to check both parts and give each round's
 enqueue view link.
 """
@@ -64,32 +65,51 @@ def _fields_section(rounds: list[dict[str, Any]]) -> list[str]:
     return lines
 
 
-def _mapping_rows(rounds: list[dict[str, Any]]) -> list[tuple[str, str, str, str]]:
-    """(rounds, item, value, note) rows; identical items across rounds are merged."""
-    merged: dict[tuple[str, str, str], list[str]] = {}
-    for r in rounds:
-        items: list[tuple[str, str, str]] = []
-        for role, info in r["roles"].items():
-            if info["confidence"] == HIGH:
-                continue
-            items.append((ROLE_LABEL[role], info["name"], info["confidence"], info["reason"]))
-        for option, info in r["status_mapping"].items():
-            if info["confidence"] == HIGH:
-                continue
-            items.append((f"状态「{option}」", info["target"], info["confidence"], info["reason"]))
-        for label, value, confidence, reason in items:
-            if confidence == UNRESOLVED:
-                shown, note = "**未推荐出**", reason or (
-                    "请从 7 个平台状态中选一个" if label.startswith("状态") else "请在配置页选择字段"
-                )
-            else:
-                shown, note = value, f"低置信：{reason}" if reason else "低置信"
-            merged.setdefault((label, shown, note), []).append(r["name"])
-    rows = []
-    for (label, shown, note), names in merged.items():
-        rounds_text = names[0] if len(names) == 1 else names[0] + "、" + "、".join(n.removeprefix("轮次") for n in names[1:])
-        rows.append((rounds_text, label, shown, note))
-    return rows
+def _round_mappings(r: dict[str, Any]) -> tuple[list[tuple[str, str]], list[tuple[str, str, str]]]:
+    """One round's mappings to confirm: (unresolved [(item, hint)], low [(item, value, reason)])."""
+    unresolved: list[tuple[str, str]] = []
+    low: list[tuple[str, str, str]] = []
+    items: list[tuple[str, str, str, str, bool]] = []
+    for role, info in r["roles"].items():
+        items.append((ROLE_LABEL[role], info["name"], info["confidence"], info["reason"], False))
+    for option, info in r["status_mapping"].items():
+        items.append((f"状态「{option}」", info["target"], info["confidence"], info["reason"], True))
+    for label, value, confidence, reason, is_status in items:
+        if confidence == HIGH:
+            continue
+        if confidence == UNRESOLVED:
+            hint = reason or ("请从 7 个平台状态中选一个" if is_status else "请在配置页选择字段")
+            unresolved.append((label, hint))
+        else:
+            low.append((label, value, reason))
+    return unresolved, low
+
+
+def _mapping_section(rounds: list[dict[str, Any]]) -> list[str]:
+    """Per round: unresolved first (high priority), then auto-recommended ones to confirm."""
+    per_round = [(r, *_round_mappings(r)) for r in rounds]
+    if not any(unresolved or low for _, unresolved, low in per_round):
+        return ["所有字段映射和状态枚举都按名称一致或多数参考项目推荐，没有需要单独确认的项。"]
+    lines = ["图例：🔴 没推荐出来，需要你来选　｜　🟡 系统自动推荐出来但是需要你确认", ""]
+    for r, unresolved, low in per_round:
+        lines += [f"**{r['name']}**", ""]
+        if not unresolved and not low:
+            lines += ["本轮没有需要确认的映射。", ""]
+            continue
+        if unresolved:
+            lines += [f"🔴 **没推荐出来，需要你来选（{len(unresolved)} 项）**", "",
+                      "| 映射项 | 说明 |", "|-|-|"]
+            lines += [f"| 🔴 {_cell(label)} | {_cell(hint)} |" for label, hint in unresolved]
+            lines.append("")
+        if low:
+            lines += [f"🟡 系统自动推荐出来但是需要你确认（{len(low)} 项）", "",
+                      "| 映射项 | 推荐值 | 推荐依据 |", "|-|-|-|"]
+            lines += [f"| 🟡 {_cell(label)} | {_cell(value)} | {_cell(reason) or '按语义推断'} |"
+                      for label, value, reason in low]
+            lines.append("")
+    while lines and lines[-1] == "":
+        lines.pop()
+    return lines
 
 
 def render_report(
@@ -107,8 +127,19 @@ def render_report(
     lines = [
         f"{head}：项目 {project_id} · {env.upper()} · {TEMPLATE_LABEL.get(report['workbench_type'], '')}",
         f"参考项目（同模版、最近发布的 {len(refs)} 个）：" + "、".join(str(r["project_id"]) for r in refs),
-        f"配置页：{page_url}",
         "",
+    ]
+    if saved:
+        # 草稿已保存时用户要去配置页核对，链接单独成块放在最前面
+        lines += [
+            "> 👉 **管理端配置页：草稿已保存，可以打开核对和修改**",
+            ">",
+            f"> **{page_url}**",
+            "",
+        ]
+    else:
+        lines += [f"配置页：{page_url}", ""]
+    lines += [
         "**一、推荐的展示字段**",
         "",
         f"以下字段都来自本项目底表（已解析 {report['base_field_count']} 列）。"
@@ -118,12 +149,7 @@ def render_report(
     lines += _fields_section(rounds)
 
     lines += ["**二、需要确认的字段映射**", ""]
-    rows = _mapping_rows(rounds)
-    if rows:
-        lines += ["只列出没推荐出来的，以及低置信度的：", "", "| 轮次 | 映射项 | 推荐值 | 说明 |", "|-|-|-|-|"]
-        lines += [f"| {_cell(a)} | {_cell(b)} | {c} | {_cell(d)} |" for a, b, c, d in rows]
-    else:
-        lines.append("所有字段映射和状态枚举都按名称一致或多数参考项目推荐，没有需要单独确认的项。")
+    lines += _mapping_section(rounds)
     lines += ["", "---", "", "**请核实以下三点：**", ""]
     lines.append("1. 展示的字段集合需要调整吗？比如增减字段、修改展示位置或编辑权限。")
     lines.append("2. 上面的字段映射需要调整吗？")
@@ -131,5 +157,5 @@ def render_report(
     for r in rounds:
         url = (view_urls or {}).get(r["round_id"], "")
         lines.append(f"   - {r['name']}：{url}")
-    lines += ["", "可以直接在配置页修改并保存，也可以在这里回复，我来更新草稿。"]
+    lines += ["", f"可以直接在配置页修改并保存（{page_url}），也可以在这里回复，我来更新草稿。"]
     return "\n".join(lines)
