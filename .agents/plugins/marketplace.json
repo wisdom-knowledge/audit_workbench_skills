@@ -1,0 +1,20 @@
+{
+  "name": "audit-workbench",
+  "interface": {
+    "displayName": "审核工作台"
+  },
+  "plugins": [
+    {
+      "name": "audit-workbench",
+      "source": {
+        "source": "local",
+        "path": "./plugin"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

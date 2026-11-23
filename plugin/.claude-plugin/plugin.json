@@ -1,0 +1,11 @@
+{
+  "name": "audit-workbench",
+  "version": "1.0.0",
+  "description": "审核工作台：项目接入、改配置、工作流、审核员与排障，含管理端 MCP。",
+  "author": {
+    "name": "Wisdom Knowledge",
+    "url": "https://github.com/wisdom-knowledge"
+  },
+  "homepage": "https://github.com/wisdom-knowledge/audit_workbench_skills",
+  "repository": "https://github.com/wisdom-knowledge/audit_workbench_skills"
+}

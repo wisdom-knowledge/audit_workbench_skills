@@ -1,0 +1,14 @@
+{
+  "name": "audit-workbench",
+  "description": "审核工作台 Claude Code 插件。",
+  "owner": {
+    "name": "Wisdom Knowledge"
+  },
+  "plugins": [
+    {
+      "name": "audit-workbench",
+      "source": "./plugin",
+      "description": "审核工作台：项目接入、改配置、工作流、审核员与排障，含管理端 MCP。"
+    }
+  ]
+}

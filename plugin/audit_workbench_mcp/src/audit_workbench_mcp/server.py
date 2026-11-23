@@ -10,7 +10,7 @@ from typing import Annotated, Any, Literal
 from mcp.server.fastmcp import FastMCP
 from pydantic import Field
 
-from . import browser_login, errors
+from . import browser_login, errors, setup_check
 from .auth import TokenStore
 from .client import AdminClient
 from .envs import get_env
@@ -18,6 +18,8 @@ from .service import AuditWorkbenchService
 
 INSTRUCTIONS = """\
 审核工作台管理端工具，调用已有的 /api/v1/admin 接口，权限和版本冲突检查都在后端。
+
+每个环境第一次使用前调用一次 check_setup，把 setup_markdown 原样展示；ready=false 时先按「处理」列解决。
 
 使用顺序：
 1. get_editor 读取项目现状，记下 summary 里的 draft_updated_at 与 published_version。
@@ -108,6 +110,11 @@ async def login(
             errors.UNAUTHORIZED, f"登录未完成：{exc}"
         ) from exc
     return {"ok": True, "env": env, "logged_in": True}
+
+
+@_tool("授权检查：确认该环境的管理端登录态、lark-cli 用户身份和阿里云日志读权限（可选），并返回插件版本。每个环境第一次使用前调用一次，把 setup_markdown 原样展示给用户。ready=false 时先按 fix 处理。只读。")
+async def check_setup(env: EnvArg) -> dict[str, Any]:
+    return await setup_check.check_setup(_service.client, env)
 
 
 @_tool("读取项目的审核工作台配置：草稿、已发布版本、平台常量、字段目录与运行状态。summary 里是后续保存和发布要回传的版本基线。")

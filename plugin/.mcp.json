@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "audit-workbench": {
+      "command": "uv",
+      "args": ["run", "--quiet", "--directory", "${CLAUDE_PLUGIN_ROOT}/audit_workbench_mcp", "audit-workbench-mcp"]
+    }
+  }
+}

@@ -43,6 +43,10 @@ class AuditWorkbenchService:
     def __init__(self, client: AdminClient) -> None:
         self._client = client
 
+    @property
+    def client(self) -> AdminClient:
+        return self._client
+
     # ---- shared helpers -------------------------------------------------
 
     def _ok(self, env: str, project_id: int | None, data: Any, **extra: Any) -> dict[str, Any]:

@@ -122,3 +122,13 @@ def has_manual_clear_step(steps: list[dict[str, Any]]) -> bool:
             if isinstance(item, dict) and item.get("value") in (None, [], {}, ""):
                 return True
     return False
+
+
+def auth_status(runner: Runner = _run) -> dict[str, Any]:
+    """{"ok", "user": <飞书用户名>, "message"} for the lark-cli user identity."""
+    resp = call(["auth", "status"], runner)
+    user = ((resp.get("identities") or {}).get("user")) or {}
+    if user.get("status") == "ready":
+        return {"ok": True, "user": user.get("userName") or "", "message": None}
+    message = user.get("message") or _error(resp) or "lark-cli 用户身份不可用"
+    return {"ok": False, "user": None, "message": message}

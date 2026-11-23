@@ -109,3 +109,26 @@ def search_record(
         "truncated": len(rows) >= LINE_LIMIT,
         "logstore": logstore,
     }
+
+
+def check_access(env: str, *, runner: Runner = _run) -> dict[str, Any]:
+    """Whether the aliyun CLI user can read this env's logstore."""
+    logstore = LOGSTORES.get(env)
+    if logstore is None:
+        return {"ok": False, "message": f"环境 {env} 没有对应的日志库"}
+    if runner is _run and not shutil.which("aliyun"):
+        return {"ok": False, "message": "本机没有安装 aliyun CLI"}
+    args = ["aliyun", "sls", "GetLogStore", "--region", REGION, "--project", PROJECT, "--logstore", logstore]
+    try:
+        proc = runner(args)
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "message": "查 SLS 超时"}
+    out = (proc.stdout or "").strip()
+    try:
+        data = json.loads(out)
+    except ValueError:
+        data = None
+    if isinstance(data, dict) and data.get("logstoreName") == logstore:
+        return {"ok": True, "message": None, "logstore": logstore}
+    detail = (out + (proc.stderr or "")).strip()[:200]
+    return {"ok": False, "message": f"读不了日志库 {logstore}：{detail}"}

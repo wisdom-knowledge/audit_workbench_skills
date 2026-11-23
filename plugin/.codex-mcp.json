@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "audit-workbench": {
+      "command": "uv",
+      "args": ["run", "--quiet", "--directory", "./audit_workbench_mcp", "audit-workbench-mcp"],
+      "cwd": "."
+    }
+  }
+}

@@ -1,6 +1,6 @@
 # 通用规则
 
-所有子技能都按这份执行。工具全部来自 `audit-workbench` MCP。`audit-workbench-enqueue-workflow`
+所有子技能都按这份执行。工具全部来自 `audit-workbench` MCP，随插件安装，安装与更新见 [安装](install.md)。`audit-workbench-enqueue-workflow`
 skill 不参与，也不要调用它的脚本。
 
 ## 写操作
@@ -32,5 +32,5 @@ skill 不参与，也不要调用它的脚本。
 
 1. 说话要短，用户没问的不主动展开。
 2. 工具返回的 `report_markdown`、`checklist_markdown`、`workflows_markdown`、
-   `binding_markdown` 原样展示，不改写，不总结，不补解释。
+   `binding_markdown`、`setup_markdown` 原样展示，不改写，不总结，不补解释。
 3. 只把真正调用过工具、拿到成功结果的事说成已完成。没查的写「未核验」，不推断成成功。

@@ -9,6 +9,7 @@
 | 工具 | 接口 | 类型 |
 |-|-|-|
 | `login` | 弹出管理端登录页 | 本地 |
+| `check_setup` | 检查管理端登录态、lark-cli 用户身份、阿里云日志读权限，返回版本 | 读 |
 | `get_editor` | `GET /admin/projects/{id}/audit-workbench/editor` | 读 |
 | `parse_feishu` | `POST /admin/audit-workbench/parse-feishu` | 读（传 project_id 时会更新字段目录） |
 | `parse_view_filter` | `POST /admin/audit-workbench/parse-view-filter` | 读 |
@@ -88,12 +89,15 @@ Agent 只做语义对齐：判断本项目底表的每个字段在各参考项�
 
 ## 安装与接入
 
-需要 [uv](https://docs.astral.sh/uv/)，Python 3.10 及以上由 uv 自动准备。
+一般随 `audit-workbench` 插件安装，插件的 `.mcp.json` 会注册这个 MCP，不用手工配置，见仓库根目录
+README。需要 [uv](https://docs.astral.sh/uv/)，Python 3.10 及以上由 uv 自动准备。
+
+开发者不装插件、直接用仓库代码时，手工注册（不要和插件同时用）：
 
 Claude Code：
 
 ```bash
-claude mcp add audit-workbench -- uv run --directory /path/to/audit_workbench_skills/audit_workbench_mcp audit-workbench-mcp
+claude mcp add audit-workbench -- uv run --directory /path/to/audit_workbench_skills/plugin/audit_workbench_mcp audit-workbench-mcp
 ```
 
 Codex（`~/.codex/config.toml`）：
@@ -101,7 +105,7 @@ Codex（`~/.codex/config.toml`）：
 ```toml
 [mcp_servers.audit-workbench]
 command = "uv"
-args = ["run", "--directory", "/path/to/audit_workbench_skills/audit_workbench_mcp", "audit-workbench-mcp"]
+args = ["run", "--directory", "/path/to/audit_workbench_skills/plugin/audit_workbench_mcp", "audit-workbench-mcp"]
 ```
 
 ## 测试

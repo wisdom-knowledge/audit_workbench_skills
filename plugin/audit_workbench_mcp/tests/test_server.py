@@ -16,7 +16,8 @@ from audit_workbench_mcp.client import AdminClient
 from audit_workbench_mcp.service import AuditWorkbenchService
 
 EXPECTED_TOOLS = {
-    "login", "get_editor", "parse_feishu", "parse_view_filter", "list_auditors",
+    "login",
+    "check_setup", "get_editor", "parse_feishu", "parse_view_filter", "list_auditors",
     "add_auditors", "remove_auditors", "save_draft", "discard_draft", "publish",
     "retry_workflows", "set_runtime_status",
     "check_readiness", "validate_config", "get_workflows", "wait_workflows",

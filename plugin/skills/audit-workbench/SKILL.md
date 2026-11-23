@@ -22,6 +22,9 @@ description: >
 - 都没有就问：「请提供环境（boe / prod）和项目 ID。」环境不默认，不按链接或项目名猜。
 - 只给了底表链接时，同样要问项目 ID。工具没有按链接反查项目的能力。
 
+这个环境在本会话里第一次用时，先调用 `check_setup(env)`，把 `setup_markdown` 原样展示。
+`ready=false` 时按「处理」列先解决，再往下做；只有阿里云日志一项不通过不影响使用。
+
 拿到后调用 `get_editor(env, project_id)`，记下 `summary` 里的草稿时间、已发布版本、运行状态，
 以及草稿或已发布配置里的 `workbenchType`（1 为模版一，2 为模版二），再交给子技能。
 
