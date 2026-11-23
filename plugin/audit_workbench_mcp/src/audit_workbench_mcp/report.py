@@ -166,7 +166,7 @@ def render_mappings(*, report: dict[str, Any], page_url: str) -> str:
         "---",
         "",
         "🔴 的项请给出选择，🟡 的项请确认推荐值是否正确。**映射有需要调整的吗？**"
-        "可以直接在配置页第 1 步手动调整并保存，也可以告诉我，我帮你调整。",
+        "可以直接在配置页第 2 步手动调整并保存，也可以告诉我，我帮你调整。",
     ]
     lines += link_block(page_url)
     return "\n".join(lines)

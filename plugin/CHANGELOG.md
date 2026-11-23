@@ -3,6 +3,10 @@
 版本号同时写在 `.claude-plugin/plugin.json`、`.codex-plugin/plugin.json` 和
 `audit_workbench_mcp/pyproject.toml`，三处保持一致，`check_setup` 返回的就是这个版本。
 
+## 1.0.3
+
+- 修正 2.2 映射确认的配置页链接：角色字段和状态枚举映射在配置页第 2 步「审核规则配置」，链接改为 `step=2`。
+
 ## 1.0.2
 
 - 推荐配置 2.1、2.2、2.3 的每个确认节点，管理端配置页链接都放在最后一行，紧跟在「有需要调整的吗？

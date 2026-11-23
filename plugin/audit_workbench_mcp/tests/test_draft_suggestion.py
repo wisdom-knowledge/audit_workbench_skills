@@ -459,6 +459,10 @@ def test_no_draft_saves_directly() -> None:
     assert out["mapping_markdown"].startswith("**2.2 ") and isinstance(out["mappings_to_confirm"], bool)
     assert out["views_markdown"].startswith("**2.3 ") and "需要确认的字段映射" not in out["report_markdown"]
     assert out["views_markdown"].endswith("audit-workbench?step=2**")
+    # 映射在配置页第 2 步「审核规则配置」
+    assert out["mapping_markdown"].endswith("audit-workbench?step=2**") or not out["mappings_to_confirm"]
+    if out["mappings_to_confirm"]:
+        assert "配置页第 2 步" in out["mapping_markdown"]
 
 
 def test_existing_draft_previews_then_overwrites_on_confirm() -> None:

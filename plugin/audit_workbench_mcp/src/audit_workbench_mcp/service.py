@@ -591,12 +591,13 @@ class AuditWorkbenchService:
 
     def _later_steps(self, built_report: dict[str, Any], env: str, project_id: int) -> dict[str, Any]:
         """Messages for steps 2.2 and 2.3; shown one at a time after the field set is confirmed."""
-        page = self.page_url(env, project_id)
+        # 配置页第 1 步是字段，第 2 步「审核规则配置」是角色字段、状态枚举映射和入队视图
+        rules_page = self.page_url(env, project_id).replace("step=1", "step=2")
         return {
-            "mapping_markdown": report.render_mappings(report=built_report, page_url=page),
+            "mapping_markdown": report.render_mappings(report=built_report, page_url=rules_page),
             "mappings_to_confirm": report.has_mappings_to_confirm(built_report),
             "views_markdown": report.render_views_prompt(
-                report=built_report, page_url=page.replace("step=1", "step=2")
+                report=built_report, page_url=rules_page
             ),
         }
 
