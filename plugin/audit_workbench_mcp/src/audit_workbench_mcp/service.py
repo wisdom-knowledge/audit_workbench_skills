@@ -595,7 +595,9 @@ class AuditWorkbenchService:
         return {
             "mapping_markdown": report.render_mappings(report=built_report, page_url=page),
             "mappings_to_confirm": report.has_mappings_to_confirm(built_report),
-            "views_markdown": report.render_views_prompt(report=built_report),
+            "views_markdown": report.render_views_prompt(
+                report=built_report, page_url=page.replace("step=1", "step=2")
+            ),
         }
 
     async def set_enqueue_views(
@@ -644,6 +646,12 @@ class AuditWorkbenchService:
             for rid, p in parsed.items()
         }
         saved["page_url"] = self.page_url(env, project_id).replace("step=1", "step=2")
+        names = {r.get("id"): r.get("name") or r.get("id") for r in config.get("fieldRounds") or []}
+        saved["missing_views"] = [rid for rid, r in rules.items() if not r.get("enqueueViewUrl")]
+        saved["views_markdown"] = report.render_views_result(
+            views=saved["views"], round_names=names, missing=saved["missing_views"],
+            page_url=saved["page_url"],
+        )
         return saved
 
     # ---- hand-off (3.4) -------------------------------------------------------

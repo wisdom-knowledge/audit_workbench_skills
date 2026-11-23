@@ -1,6 +1,6 @@
 [project]
 name = "audit-workbench-mcp"
-version = "1.0.1"
+version = "1.0.2"
 description = "审核工作台管理端 MCP 薄封装，本地 stdio 运行"
 requires-python = ">=3.10"
 dependencies = [

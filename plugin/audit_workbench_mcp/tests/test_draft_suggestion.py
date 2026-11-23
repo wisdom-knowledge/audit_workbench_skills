@@ -308,7 +308,7 @@ def _mappings(data: dict | None = None) -> str:
 
 def test_field_step_asks_only_about_fields() -> None:
     text = _render()
-    assert "**2.1 确认展示的字段**" in text and "展示的字段需要调整吗？" in text
+    assert "**2.1 确认展示的字段**" in text and "展示的字段有需要调整的吗？" in text
     assert "需要确认的字段映射" not in text and "入队" not in text.split("**2.1")[1]
 
 
@@ -369,19 +369,35 @@ def test_mapping_step_with_nothing_to_confirm() -> None:
     assert "没有需要单独确认的项" in text and "请给出选择" not in text
 
 
-def test_saved_report_puts_config_link_in_a_callout() -> None:
-    url = "https://admin-test.meetchances.com/projects/1234/audit-workbench?step=1"
-    saved = _render()
-    assert f"> 👉 **管理端配置页：草稿已保存，可以打开核对和修改**\n>\n> **{url}**" in saved
-    assert saved.index(url) < saved.index("**2.1 确认展示的字段**")
+URL = "https://admin-test.meetchances.com/projects/1234/audit-workbench?step=1"
+
+
+def _ends_with_link(text: str, url: str) -> None:
+    """Every confirmation step ends with: question line, blank, then the link callout."""
+    lines = text.splitlines()
+    assert lines[-1] == f"> **{url}**" and lines[-4] == "" and lines[-3].startswith("> 👉 **管理端配置页")
+    assert "可以直接在配置页" in lines[-5] and "我帮你" in lines[-5]
+    assert text.count(url) == 1
+
+
+def test_every_step_puts_the_config_link_last() -> None:
+    _ends_with_link(_render(), URL)
+    _ends_with_link(_mappings(_two_round_report()), "https://admin/p/1234")
+    views = report.render_views_prompt(report=_two_round_report(), page_url="https://admin/p/1234?step=2")
+    _ends_with_link(views, "https://admin/p/1234?step=2")
+
+
+def test_unsaved_preview_link_says_draft_not_saved() -> None:
     preview = _render(saved=False)
-    assert "尚未保存" in preview and "> 👉" not in preview and f"配置页：{url}" in preview
+    assert "尚未保存" in preview.splitlines()[0]
+    assert "> 👉 **管理端配置页（草稿尚未保存" in preview
+    _ends_with_link(preview, URL)
 
 
 def test_views_step_lists_every_round() -> None:
-    text = report.render_views_prompt(report=_two_round_report())
+    text = report.render_views_prompt(report=_two_round_report(), page_url="u")
     assert text.startswith("**2.3 给出每一轮的入队条件**")
-    assert text.endswith("- 轮次一：\n- 轮次二：")
+    assert "- 轮次一：\n- 轮次二：" in text
 
 
 # ---- service: save rules -------------------------------------------------------------
@@ -442,6 +458,7 @@ def test_no_draft_saves_directly() -> None:
     # 2.2、2.3 的文本随结果一起返回，由技能在用户确认上一步后再展示
     assert out["mapping_markdown"].startswith("**2.2 ") and isinstance(out["mappings_to_confirm"], bool)
     assert out["views_markdown"].startswith("**2.3 ") and "需要确认的字段映射" not in out["report_markdown"]
+    assert out["views_markdown"].endswith("audit-workbench?step=2**")
 
 
 def test_existing_draft_previews_then_overwrites_on_confirm() -> None:
@@ -459,12 +476,18 @@ def test_existing_draft_previews_then_overwrites_on_confirm() -> None:
 
 
 def test_set_enqueue_views_parses_and_saves() -> None:
-    draft = {"config": {"auditStatusRules": [{"roundId": "round-1", "enqueueViewUrl": ""}]},
+    draft = {"config": {"auditStatusRules": [{"roundId": "round-1", "enqueueViewUrl": ""},
+                                             {"roundId": "round-2", "enqueueViewUrl": ""}],
+                        "fieldRounds": [{"id": "round-1", "name": "轮次一"}, {"id": "round-2", "name": "轮次二"}]},
              "updated_at": "2026-09-19T08:00:00", "wizard_step": 1}
     service, calls = make_service(draft)
     out = asyncio.run(service.set_enqueue_views("boe", 1234, {"round-1": "https://x/view"}))
     body = json.loads(next(c for c in calls if c.method == "PUT").content)
     assert body["config"]["auditStatusRules"][0]["enqueueViewUrl"] == "https://x/view"
     assert out["views"]["round-1"]["summary"] == "审核状态 等于 待审核"
+    assert out["missing_views"] == ["round-2"]
+    text = out["views_markdown"]
+    assert "| 轮次一 |" in text and "审核状态 等于 待审核" in text and "还差这几轮的入队视图：轮次二" in text
+    _ends_with_link(text, "https://admin-test.meetchances.com/projects/1234/audit-workbench?step=2")
     with pytest.raises(errors.AuditWorkbenchError):
         asyncio.run(service.set_enqueue_views("boe", 1234, {"round-9": "u"}))

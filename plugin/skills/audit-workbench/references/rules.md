@@ -31,5 +31,5 @@
 
 1. 说话要短，用户没问的不主动展开。
 2. 工具返回的 `report_markdown`、`checklist_markdown`、`workflows_markdown`、
-   `binding_markdown`、`setup_markdown` 原样展示，不改写，不总结，不补解释。
+   `binding_markdown`、`setup_markdown`、`mapping_markdown`、`views_markdown` 原样展示，不改写，不总结，不补解释。
 3. 只把真正调用过工具、拿到成功结果的事说成已完成。没查的写「未核验」，不推断成成功。

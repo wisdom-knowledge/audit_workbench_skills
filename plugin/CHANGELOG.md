@@ -3,6 +3,13 @@
 版本号同时写在 `.claude-plugin/plugin.json`、`.codex-plugin/plugin.json` 和
 `audit_workbench_mcp/pyproject.toml`，三处保持一致，`check_setup` 返回的就是这个版本。
 
+## 1.0.2
+
+- 推荐配置 2.1、2.2、2.3 的每个确认节点，管理端配置页链接都放在最后一行，紧跟在「有需要调整的吗？
+  可以直接在配置页手动调整并保存，也可以告诉我，我帮你调整」之后。2.3 的链接指向配置页第 2 步。
+- `set_enqueue_views` 返回 `views_markdown`：每轮视图和筛选条件、还差的轮次，最后是配置页链接。
+- 2.1 字段报告展示后不再追加待办或问题清单。
+
 ## 1.0.1
 
 推荐配置报告的交互调整。

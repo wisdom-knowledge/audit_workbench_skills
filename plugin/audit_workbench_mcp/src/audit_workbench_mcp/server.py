@@ -329,7 +329,7 @@ async def suggest_draft(
     )
 
 
-@_tool("把用户给出的各轮入队视图链接写入现有草稿并保存。key 为轮次 ID（round-1、round-2…）。每个链接先解析，解析失败则不保存。返回各轮视图的筛选条件摘要。")
+@_tool("把用户给出的各轮入队视图链接写入现有草稿并保存。key 为轮次 ID（round-1、round-2…）。每个链接先解析，解析失败则不保存。返回各轮视图的筛选条件摘要和 views_markdown（原样展示给用户核对，含还差的轮次和配置页链接）。")
 async def set_enqueue_views(
     env: EnvArg,
     project_id: ProjectIdArg,
