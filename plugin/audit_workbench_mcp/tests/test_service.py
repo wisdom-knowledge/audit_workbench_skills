@@ -83,6 +83,24 @@ def test_get_editor_unwraps_envelope_and_summarizes() -> None:
     assert_no_token(out)
 
 
+def test_field_pool_is_neither_shown_nor_sent() -> None:
+    pool = [{"id": "f1", "name": "题目"}]
+    editor = json.loads(json.dumps(EDITOR))
+    editor["draft"]["config"]["sourceFields"] = pool
+    editor["published"]["config"]["sourceFields"] = pool
+    editor["fieldCatalog"] = pool
+    service, rec = make_service({EDITOR_PATH: ok(editor), DRAFT_PATH: ok({"updated_at": "x"})})
+    out = run(service.get_editor("boe", 7))
+    assert "sourceFields" not in out["data"]["draft"]["config"]
+    assert "sourceFields" not in out["data"]["published"]["config"]
+    assert out["data"]["fieldCatalog"] == pool
+    preview = run(service.save_draft("boe", 7, {"fields": [], "sourceFields": pool}, "2026-09-01T10:00:00"))
+    assert preview["request"]["config_keys"] == ["fields"]
+    run(service.save_draft("boe", 7, {"fields": [], "sourceFields": pool}, "2026-09-01T10:00:00", confirm=True))
+    put = next(c for c in rec.calls if c.method == "PUT")
+    assert "sourceFields" not in json.loads(put.content)["config"]
+
+
 def test_prod_uses_prod_base_url() -> None:
     service, rec = make_service({EDITOR_PATH: ok(EDITOR)})
     run(service.get_editor("prod", 7))

@@ -2,8 +2,9 @@
 
 Step 2 of onboarding is confirmed in three parts, one message each:
 2.1 the recommended fields per round, all taken from the project's own base;
-2.2 round by round, the role and status mappings that were not resolved (first,
-red) and the ones recommended by inference that the user should confirm (yellow);
+2.2 round by round, the field mappings and the status enum mappings in two tables,
+each listing unresolved items (red) first, then inferred ones to confirm (yellow),
+then high-confidence ones the user can skip (green);
 2.3 the enqueue view link of each round.
 """
 
@@ -11,7 +12,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .draft_builder import HIGH, UNRESOLVED
+from .draft_builder import HIGH, LOW, UNRESOLVED
 
 AREA_ORDER = ("QUESTION_INFO", "EXPERT_INFO", "MACHINE_AUDIT_INFO", "AUDIT_ACTION")
 AREA_LABEL = {
@@ -23,11 +24,11 @@ AREA_LABEL = {
 AREA_ICON = {k: v.split()[0] for k, v in AREA_LABEL.items()}
 PERM_LABEL = {"READONLY": "⚪ 仅阅读", "EDITABLE": "🔵 可编辑"}
 ROLE_LABEL = {
-    "status": "审核状态字段",
-    "reviewer": "审核人字段",
-    "talent_id": "talent_id 字段",
-    "audit_advice": "审核建议字段",
-    "audit_action": "审核操作字段",
+    "status": "审核状态",
+    "reviewer": "审核人",
+    "talent_id": "talent_id",
+    "audit_advice": "审核建议",
+    "audit_action": "审核操作",
 }
 TEMPLATE_LABEL = {1: "模版一", 2: "模版二"}
 
@@ -65,51 +66,61 @@ def _fields_section(rounds: list[dict[str, Any]]) -> list[str]:
     return lines
 
 
-def _round_mappings(r: dict[str, Any]) -> tuple[list[tuple[str, str]], list[tuple[str, str, str]]]:
-    """One round's mappings to confirm: (unresolved [(item, hint)], low [(item, value, reason)])."""
-    unresolved: list[tuple[str, str]] = []
-    low: list[tuple[str, str, str]] = []
-    items: list[tuple[str, str, str, str, bool]] = []
-    for role, info in r["roles"].items():
-        items.append((ROLE_LABEL[role], info["name"], info["confidence"], info["reason"], False))
-    for option, info in r["status_mapping"].items():
-        items.append((f"状态「{option}」", info["target"], info["confidence"], info["reason"], True))
-    for label, value, confidence, reason, is_status in items:
-        if confidence == HIGH:
-            continue
-        if confidence == UNRESOLVED:
-            hint = reason or ("请从 7 个平台状态中选一个" if is_status else "请在配置页选择字段")
-            unresolved.append((label, hint))
-        else:
-            low.append((label, value, reason))
-    return unresolved, low
+MARK = {UNRESOLVED: "🔴", LOW: "🟡", HIGH: "🟢"}
+MARK_ORDER = (UNRESOLVED, LOW, HIGH)
+LEGEND = "图例：🔴 没推荐出来，需要你来选　｜　🟡 系统自动推荐出来但是需要你确认　｜　🟢 置信度最高，可以不关注"
+
+
+def _row(item: str, value: str, confidence: str, reason: str, hint: str) -> tuple[str, str, str, str]:
+    if confidence == UNRESOLVED:
+        return confidence, item, "—", reason or hint
+    return confidence, item, value, reason or ("名称一致" if confidence == HIGH else "按语义推断")
+
+
+def _round_rows(r: dict[str, Any]) -> tuple[list[tuple[str, str, str, str]], list[tuple[str, str, str, str]]]:
+    """One round's (field mapping rows, status enum rows), each sorted red → yellow → green."""
+    fields = [
+        _row(ROLE_LABEL[role], info["name"], info["confidence"], info["reason"], "请在配置页选择字段")
+        for role, info in r["roles"].items()
+    ]
+    statuses = [
+        _row(option, info["target"], info["confidence"], info["reason"], "请从 7 个平台状态中选一个")
+        for option, info in r["status_mapping"].items()
+    ]
+    key = lambda row: MARK_ORDER.index(row[0])  # noqa: E731 - stable sort keeps the original order per colour
+    return sorted(fields, key=key), sorted(statuses, key=key)
+
+
+def _table(title: str, rows: list[tuple[str, str, str, str]]) -> list[str]:
+    if not rows:
+        return []
+    lines = [title, "", "| 映射项 | 推荐值 | 说明 |", "|-|-|-|"]
+    lines += [f"| {MARK[c]} {_cell(item)} | {_cell(value)} | {_cell(note)} |" for c, item, value, note in rows]
+    return lines + [""]
 
 
 def _mapping_section(rounds: list[dict[str, Any]]) -> list[str]:
-    """Per round: unresolved first (high priority), then auto-recommended ones to confirm."""
-    per_round = [(r, *_round_mappings(r)) for r in rounds]
-    if not any(unresolved or low for _, unresolved, low in per_round):
+    """Per round: the field mapping table, then the status enum table; red first, green last."""
+    if not any(_open(r) for r in rounds):
         return ["所有字段映射和状态枚举都按名称一致或多数参考项目推荐，没有需要单独确认的项。"]
-    lines = ["图例：🔴 没推荐出来，需要你来选　｜　🟡 系统自动推荐出来但是需要你确认", ""]
-    for r, unresolved, low in per_round:
+    lines = [LEGEND, ""]
+    for r in rounds:
+        fields, statuses = _round_rows(r)
         lines += [f"**{r['name']}**", ""]
-        if not unresolved and not low:
-            lines += ["本轮没有需要确认的映射。", ""]
+        if not fields and not statuses:
+            lines += ["本轮没有映射项。", ""]
             continue
-        if unresolved:
-            lines += [f"🔴 **没推荐出来，需要你来选（{len(unresolved)} 项）**", "",
-                      "| 映射项 | 说明 |", "|-|-|"]
-            lines += [f"| 🔴 {_cell(label)} | {_cell(hint)} |" for label, hint in unresolved]
-            lines.append("")
-        if low:
-            lines += [f"🟡 系统自动推荐出来但是需要你确认（{len(low)} 项）", "",
-                      "| 映射项 | 推荐值 | 推荐依据 |", "|-|-|-|"]
-            lines += [f"| 🟡 {_cell(label)} | {_cell(value)} | {_cell(reason) or '按语义推断'} |"
-                      for label, value, reason in low]
-            lines.append("")
+        lines += _table("字段映射", fields)
+        lines += _table("状态枚举映射", statuses)
     while lines and lines[-1] == "":
         lines.pop()
     return lines
+
+
+def _open(r: dict[str, Any]) -> bool:
+    """Whether the round has a red or yellow item."""
+    items = list(r["roles"].values()) + list(r["status_mapping"].values())
+    return any(info["confidence"] != HIGH for info in items)
 
 
 def link_block(page_url: str, saved: bool = True) -> list[str]:
@@ -145,18 +156,18 @@ def render_report(
         "---",
         "",
         "**展示的字段有需要调整的吗？**（比如增减字段、修改展示位置或编辑权限）"
-        "可以直接在配置页手动调整并保存，也可以告诉我，我帮你调整。",
+        "可以直接在配置页手动调整并保存（⭐️更快捷），也可以告诉我，我帮你调整。",
     ]
     lines += link_block(page_url, saved)
     return "\n".join(lines)
 
 
 def has_mappings_to_confirm(report: dict[str, Any]) -> bool:
-    return any(u or low for u, low in (_round_mappings(r) for r in report["rounds"]))
+    return any(_open(r) for r in report["rounds"])
 
 
 def render_mappings(*, report: dict[str, Any], page_url: str) -> str:
-    """Step 2.2: per round, unresolved mappings first, then the auto-recommended ones to confirm."""
+    """Step 2.2: per round, field mappings and status enum mappings; red, yellow, then green."""
     lines = ["**2.2 确认字段映射和状态枚举映射**", ""]
     lines += _mapping_section(report["rounds"])
     if not has_mappings_to_confirm(report):
@@ -166,7 +177,7 @@ def render_mappings(*, report: dict[str, Any], page_url: str) -> str:
         "---",
         "",
         "🔴 的项请给出选择，🟡 的项请确认推荐值是否正确。**映射有需要调整的吗？**"
-        "可以直接在配置页第 2 步手动调整并保存，也可以告诉我，我帮你调整。",
+        "可以直接在配置页第 2 步手动调整并保存（⭐️更快捷），也可以告诉我，我帮你调整。",
     ]
     lines += link_block(page_url)
     return "\n".join(lines)
@@ -186,7 +197,7 @@ def render_views_prompt(*, report: dict[str, Any], page_url: str) -> str:
         "",
         "---",
         "",
-        "可以直接在配置页第 2 步手动填写并保存，也可以把链接发给我，我帮你填。",
+        "可以直接在配置页第 2 步手动填写并保存（⭐️更快捷），也可以把链接发给我，我帮你填。",
     ]
     lines += link_block(page_url)
     return "\n".join(lines)
@@ -208,7 +219,7 @@ def render_views_result(
         "",
         "---",
         "",
-        "**入队条件有需要调整的吗？**可以直接在配置页第 2 步手动调整并保存，也可以告诉我，我帮你调整。",
+        "**入队条件有需要调整的吗？**可以直接在配置页第 2 步手动调整并保存（⭐️更快捷），也可以告诉我，我帮你调整。",
     ]
     lines += link_block(page_url)
     return "\n".join(lines)

@@ -263,7 +263,7 @@ def test_config_shape_matches_admin_draft() -> None:
     assert config["fields"] == config["fieldRounds"][0]["fields"]
     assert config["layout"] == config["layoutRounds"][0]["layout"]
     assert config["fieldRounds"][0]["id"] == "round-1" and config["fieldRounds"][0]["name"] == "轮次一"
-    assert config["sourceFields"] == BASE
+    assert "sourceFields" not in config  # 全量字段池后端不存，草稿里不带
     assert config["canvasRatio"] == "LEFT_2_RIGHT_1"
     rule = config["auditStatusRules"][0]
     assert rule["statusFieldId"] == "n4" and rule["talentIdFieldId"] == "n5"
@@ -312,14 +312,16 @@ def test_field_step_asks_only_about_fields() -> None:
     assert "需要确认的字段映射" not in text and "入队" not in text.split("**2.1")[1]
 
 
-def test_mapping_step_lists_only_unresolved_and_to_confirm() -> None:
+def test_mapping_step_splits_field_and_status_tables() -> None:
     text = _mappings()
     assert text.startswith("**2.2 确认字段映射和状态枚举映射**")
-    assert "| 🔴 状态「搁置」 | 请从 7 个平台状态中选一个 |" in text
-    assert "| 🟡 talent_id 字段 | 一审人员ID | 参考项目叫「一轮审核员talent_id」 |" in text
-    assert "低置信" not in text
-    assert "审核状态字段" not in text and "「待审核」" not in text and "「打回」" not in text
-    assert "🔴 的项请给出选择" in text
+    assert "🟢 置信度最高，可以不关注" in text
+    assert text.index("字段映射\n") < text.index("状态枚举映射\n")
+    assert "| 🔴 搁置 | — | 请从 7 个平台状态中选一个 |" in text
+    assert "| 🟡 talent_id | 一审人员ID | 参考项目叫「一轮审核员talent_id」 |" in text
+    assert "| 🟢 审核状态 | 审核状态 |" in text and "| 🟢 待审核 | 待审核 |" in text
+    assert "低置信" not in text and "状态「" not in text and "审核状态字段" not in text
+    assert "🔴 的项请给出选择" in text and "（⭐️更快捷）" in text
 
 
 def _info(name: str, confidence: str, reason: str = "") -> dict[str, str]:
@@ -342,22 +344,23 @@ def _two_round_report() -> dict:
     }
 
 
-def test_mapping_step_splits_rounds_and_puts_unresolved_first() -> None:
+def test_mapping_step_splits_rounds_and_orders_red_yellow_green() -> None:
     text = _mappings(_two_round_report())
     one, two = text.split("**轮次二**")
     assert "**轮次一**" in one and "轮次二" not in one
-    # 每轮内：没推荐出来的在前，系统推荐待确认的在后
-    assert one.index("🔴 **没推荐出来") < one.index("🟡 系统自动推荐出来但是需要你确认（")
-    assert "| 🔴 状态「搁置」 |" in one and "| 🟡 talent_id 字段 | 一审ID | 按语义推断 |" in one
-    assert "| 🔴 审核人字段 | 参考项目里没有对应字段 |" in two
-    assert "| 🟡 状态「复核中」 | 其他 | 按语义推断 |" in two
-    assert "初审状态" not in text
+    fields_one = one.split("字段映射\n")[1].split("状态枚举映射\n")[0]
+    assert fields_one.index("| 🟡 talent_id | 一审ID | 按语义推断 |") < fields_one.index("| 🟢 审核状态 | 初审状态 | 名称一致 |")
+    assert "| 🔴 搁置 | — | 请从 7 个平台状态中选一个 |" in one.split("状态枚举映射\n")[-1]
+    assert "| 🔴 审核人 | — | 参考项目里没有对应字段 |" in two
+    assert "| 🟡 复核中 | 其他 | 按语义推断 |" in two
 
 
-def test_mapping_step_round_without_open_items_says_so() -> None:
+def test_mapping_step_round_without_items_says_so() -> None:
     data = _two_round_report()
     data["rounds"][1]["roles"], data["rounds"][1]["status_mapping"] = {}, {}
-    assert "**轮次二**\n\n本轮没有需要确认的映射。" in _mappings(data)
+    text = _mappings(data)
+    assert "**轮次二**\n\n本轮没有映射项。" in text
+    assert "**轮次二**\n\n字段映射" not in text
 
 
 def test_mapping_step_with_nothing_to_confirm() -> None:

@@ -337,7 +337,6 @@ def build_draft(
         "feishuTableUrl": feishu_table_url,
         "fields": field_rounds[0]["fields"],
         "fieldRounds": field_rounds,
-        "sourceFields": base_fields,
         "auditStatusRules": rules,
         "questionTags": [],
         "layout": layout_rounds[0]["layout"],

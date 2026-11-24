@@ -1,6 +1,6 @@
 {
   "name": "audit-workbench",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "审核工作台：项目接入、改配置、工作流、审核员与排障，含管理端 MCP。",
   "author": {
     "name": "Wisdom Knowledge",

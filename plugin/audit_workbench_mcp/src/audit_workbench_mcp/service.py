@@ -20,6 +20,19 @@ from .client import AdminClient
 from .envs import get_env
 
 
+def _without_field_pool(config: dict[str, Any]) -> dict[str, Any]:
+    """The admin page's full field pool is not stored by the backend; never send or show it."""
+    return {k: v for k, v in config.items() if k != "sourceFields"}
+
+
+def _hide_field_pool(editor: dict[str, Any]) -> dict[str, Any]:
+    out = dict(editor)
+    for key in ("draft", "published"):
+        if isinstance(out.get(key), dict) and isinstance(out[key].get("config"), dict):
+            out[key] = {**out[key], "config": _without_field_pool(out[key]["config"])}
+    return out
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
@@ -134,7 +147,7 @@ class AuditWorkbenchService:
 
     async def get_editor(self, env: str, project_id: int) -> dict[str, Any]:
         editor = await self._editor(env, project_id)
-        return self._ok(env, project_id, editor, summary=snapshot_from_editor(editor))
+        return self._ok(env, project_id, _hide_field_pool(editor), summary=snapshot_from_editor(editor))
 
     async def parse_feishu(
         self, env: str, table_url: str, project_id: int | None = None
@@ -193,6 +206,7 @@ class AuditWorkbenchService:
         confirm: bool = False,
         confirm_project_id: int | None = None,
     ) -> dict[str, Any]:
+        config = _without_field_pool(config)
         body = {
             "config": config,
             "base_updated_at": base_updated_at,
@@ -256,6 +270,7 @@ class AuditWorkbenchService:
         confirm: bool = False,
         confirm_project_id: int | None = None,
     ) -> dict[str, Any]:
+        config = _without_field_pool(config)
         body = {"base_version": base_version, "config": config, "force": False}
         if not confirm:
             current = await self._snapshot(env, project_id)
@@ -631,7 +646,7 @@ class AuditWorkbenchService:
             )
             rules[round_id]["enqueueViewUrl"] = url
         body = {
-            "config": config,
+            "config": _without_field_pool(config),
             "base_updated_at": draft.get("updated_at"),
             "wizard_step": draft.get("wizard_step") or 1,
             "force": False,
