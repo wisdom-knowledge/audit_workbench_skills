@@ -3,6 +3,16 @@
 版本号同时写在 `.claude-plugin/plugin.json`、`.codex-plugin/plugin.json` 和
 `audit_workbench_mcp/pyproject.toml`，三处保持一致，`check_setup` 返回的就是这个版本。
 
+## 1.0.5
+
+- 发布前「配置校验」只看后端发布预检：`check_readiness` 把 `errors` 和 `workflowErrors` 都记为
+  blocker，不再在本地检查状态映射、审核员数量，也不再给 warning / unverified。
+  `pre_publish_checklist` 的阻断项改为复用 `check_readiness`。
+- 新增发布后「全链路校验」工具 `verify_pipeline`（只读），清单逐项打 ✅ / ❌ / ⏳：有审核员；
+  每轮审核员 talent_id 字段是查找引用且引用的表在同一个多维表格里；「人才招聘」是底表可管理协作者；
+  等待工作流创建完成。读不到的项算 ❌。
+- 接入阶段 6 改为「全链路校验与交付」，全部 ✅ 后再写交付。
+
 ## 1.0.4
 
 - 2.2 每轮拆成「字段映射」和「状态枚举映射」两张表，映射项不再带「字段」「状态」前后缀。新增 🟢

@@ -3,14 +3,14 @@
 执行前提：草稿已保存，每一轮的入队视图链接都不为空。有轮次为空时先补，否则发布会因视图解析失败
 被拒绝，或发布后该轮不会入队。
 
-## 检查
+## 配置校验
 
-`check_readiness(env, project_id)`。不传 config 时工具读取已保存的草稿。
+`check_readiness(env, project_id)`。不传 config 时工具读取已保存的草稿。它只调后端发布预检，
+`errors`（发布会失败）和 `workflowErrors`（工作流建不出来）都记为 `blocker`。
 
-- `summary.ready_to_publish=false` 时停下，把 level 为 `blocker` 的项逐条列给用户，说明要先修，
-  修好后重新检查。
-- `warning` 项不阻断，但要提醒用户留意。`unverified` 项不算通过，说明这一项查不到、需要用户
-  自己确认，不要写成「已通过」。
+- `summary.ready_to_publish=false` 时停下，把每条 `blocker` 逐条列给用户，说明要先修，修好后
+  重新检查。
+- 审核员、底表依赖、人才招聘协作者和工作流创建不在这里查，发布后按「全链路校验」做。
 
 ## 发布前清单
 
@@ -41,3 +41,20 @@ publish(env, project_id, config, base_version, confirm=true, confirm_project_id=
 
 发布成功后记下返回的 `version` 和 `published_at`。发布会删除草稿，之后再改配置会以这个版本为底
 新建草稿。
+
+## 全链路校验
+
+改配置时，发布后接着调用 `verify_pipeline(env, project_id)`。新项目接入时审核员要到阶段 5 才加，
+这一步放在阶段 5 之后做，不在发布后马上做。
+
+工具只读，把 `checklist_markdown` 原样展示给用户。清单逐项打 ✅ 或 ❌：
+
+- 有审核员：审核员数量为 0 时 ❌。
+- 依赖无误：每一轮审核员 talent_id 对应的字段必须是查找引用，且引用的表在同一个多维表格里。
+- 依赖无误：「人才招聘」是底表可管理协作者。
+- 工作流创建：等工作流同步完成。仍在排队或执行时是 ⏳，稍后再调一次，不说成已通过。
+
+读不到的项一律算 ❌，不要说成通过。有 ❌ 时按每项的说明处理，处理完再调一次 `verify_pipeline`：
+没有审核员走 [审核员](../../audit-workbench-auditors/SKILL.md)；协作者缺失或权限不够用
+`ensure_app_collaborator`；talent_id 不是引用或引用的表不在当前多维表格，请用户在飞书上改底表字段，
+或在配置页换一个字段后重新发布；工作流失败走 [工作流](../../audit-workbench-workflow/SKILL.md) 的重试。

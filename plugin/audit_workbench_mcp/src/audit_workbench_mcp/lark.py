@@ -53,21 +53,56 @@ def _error(resp: dict[str, Any]) -> str:
     return str(err.get("message") or resp.get("msg") or "")[:200]
 
 
+def app_collaborator(app_token: str, runner: Runner = _run) -> dict[str, Any]:
+    """Read-only: is 人才招聘 a collaborator of the base, and with which perm.
+
+    Returns {"ok": True, "member": <member dict> | None} or {"ok": False, "message": ...}.
+    """
+    listed = call(["drive", "+member-list", "--token", app_token, "--type", "bitable",
+                   "--as", "user", "--format", "json"], runner)
+    if not listed.get("ok"):
+        return {"ok": False, "message": _error(listed)}
+    items = (listed.get("data") or {}).get("items") or []
+    hit = next(
+        (m for m in items if m.get("member_type") == "appid" and m.get("member_id") == RECRUIT_APP_ID),
+        None,
+    )
+    return {"ok": True, "member": hit}
+
+
+def list_tables(app_token: str, runner: Runner = _run) -> dict[str, Any]:
+    """{"ok", "tables": [{"id", "name"}]} of the base."""
+    resp = call(["base", "+table-list", "--base-token", app_token, "--limit", "100",
+                 "--as", "user", "--format", "json"], runner)
+    if not resp.get("ok"):
+        return {"ok": False, "message": _error(resp), "tables": []}
+    tables = (resp.get("data") or {}).get("tables") or []
+    return {"ok": True, "tables": [
+        {"id": str(t.get("id") or t.get("table_id") or ""), "name": str(t.get("name") or "")}
+        for t in tables if isinstance(t, dict)
+    ]}
+
+
+def list_fields(app_token: str, table_id: str, runner: Runner = _run) -> dict[str, Any]:
+    """{"ok", "fields": [...]} as lark-cli returns them (lookup fields carry from/select)."""
+    resp = call(["base", "+field-list", "--base-token", app_token, "--table-id", table_id,
+                 "--limit", "200", "--as", "user", "--format", "json"], runner)
+    if not resp.get("ok"):
+        return {"ok": False, "message": _error(resp), "fields": []}
+    fields = (resp.get("data") or {}).get("fields") or []
+    return {"ok": True, "fields": [f for f in fields if isinstance(f, dict)]}
+
+
 def ensure_app_collaborator(app_token: str, runner: Runner = _run) -> dict[str, Any]:
     """Make 人才招聘 a full_access collaborator of the base.
 
     Returns {"ok": True, "action": "present" | "added" | "upgraded"} or
     {"ok": False, "reason": ..., "message": ...}.
     """
-    listed = call(["drive", "+member-list", "--token", app_token, "--type", "bitable",
-                   "--as", "user", "--format", "json"], runner)
-    if not listed.get("ok"):
-        return {"ok": False, "reason": "member_list_failed", "message": _error(listed)}
-    items = (listed.get("data") or {}).get("items") or []
-    hit = next(
-        (m for m in items if m.get("member_type") == "appid" and m.get("member_id") == RECRUIT_APP_ID),
-        None,
-    )
+    state = app_collaborator(app_token, runner)
+    if not state["ok"]:
+        return {"ok": False, "reason": "member_list_failed", "message": state["message"]}
+    hit = state["member"]
     if hit and hit.get("perm") == FULL_ACCESS:
         return {"ok": True, "action": "present", "app": RECRUIT_APP_NAME}
 

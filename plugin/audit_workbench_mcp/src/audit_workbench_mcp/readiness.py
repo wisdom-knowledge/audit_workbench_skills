@@ -1,4 +1,4 @@
-"""Derived views over backend data: workflow display status and the readiness checklist.
+"""Derived views over backend data: workflow display status and the pre-publish check.
 
 These are pure functions so the rules live in one place and are easy to test.
 """
@@ -17,10 +17,9 @@ MANUAL = "manual"  # config changed but the workflow was repaired by hand; not o
 
 _TERMINAL = {SYNCED, FAILED, MANUAL}
 
-# Readiness item levels.
-BLOCKER = "blocker"  # publish will fail
-WARNING = "warning"  # publish succeeds but something will not work as expected
-UNVERIFIED = "unverified"  # could not be checked here; never counts as passed
+# Readiness item level. Only the backend validation is checked before publish,
+# and every item it reports blocks.
+BLOCKER = "blocker"
 
 
 def workflow_display_status(item: dict[str, Any]) -> str:
@@ -100,50 +99,6 @@ def stop_waiting(summary: dict[str, Any]) -> bool:
     return any(i["display_status"] in (FAILED, RETRYING) for i in summary["items"])
 
 
-def _field_options(config: dict[str, Any], round_id: str, field_id: str) -> list[str] | None:
-    """Options of a field, looked up in the round's fields first, then the shared pools."""
-    pools: list[list[dict[str, Any]]] = []
-    for round_item in config.get("fieldRounds") or []:
-        if isinstance(round_item, dict) and round_item.get("id") == round_id:
-            pools.append(round_item.get("fields") or [])
-    pools.append(config.get("fields") or [])
-    pools.append(config.get("sourceFields") or [])
-    for pool in pools:
-        for field in pool:
-            if isinstance(field, dict) and field.get("id") == field_id:
-                return list(field.get("options") or [])
-    return None
-
-
-def mapping_items(config: dict[str, Any]) -> list[dict[str, Any]]:
-    """Status options of each round that have no platform status mapped."""
-    items = []
-    for rule in config.get("auditStatusRules") or []:
-        if not isinstance(rule, dict):
-            continue
-        round_id = str(rule.get("roundId") or "")
-        status_id = str(rule.get("statusFieldId") or "")
-        if not status_id:
-            continue  # the backend validation reports missing role fields
-        options = _field_options(config, round_id, status_id)
-        if options is None:
-            continue
-        mapping = rule.get("statusValueMapping") or {}
-        unmapped = [o for o in options if o not in mapping]
-        if unmapped:
-            items.append(
-                {
-                    "code": "status_value_unmapped",
-                    "level": WARNING,
-                    "round": round_id,
-                    "message": f"{round_id} 审核状态有 {len(unmapped)} 个选项没有映射到平台状态："
-                    + "、".join(unmapped),
-                    "fix_hint": "在配置第二步为这些选项选择对应的平台审核状态。",
-                }
-            )
-    return items
-
-
 def validation_items(result: dict[str, Any]) -> list[dict[str, Any]]:
     items = []
     for err in result.get("errors") or []:
@@ -161,33 +116,10 @@ def validation_items(result: dict[str, Any]) -> list[dict[str, Any]]:
         items.append(
             {
                 "code": err.get("rule"),
-                "level": WARNING,
+                "level": BLOCKER,
                 "step": err.get("step"),
                 "message": err.get("message"),
-                "fix_hint": "发布能成功，但飞书工作流建不出来，审核员会收不到任务。",
+                "fix_hint": "飞书工作流会建不出来，审核员收不到任务，修好后再检查。",
             }
         )
     return items
-
-
-def auditor_items(auditor_list: dict[str, Any]) -> list[dict[str, Any]]:
-    count = int((auditor_list.get("summary") or {}).get("auditor_count") or auditor_list.get("count") or 0)
-    if count == 0:
-        return [
-            {
-                "code": "no_auditors",
-                "level": BLOCKER,
-                "message": "项目还没有审核员。",
-                "fix_hint": "用 add_auditors 添加审核员 talent_id。",
-            }
-        ]
-    return []
-
-
-APP_PERMISSION_ITEM = {
-    "code": "app_collaborator_unverified",
-    "level": UNVERIFIED,
-    "message": "人才招聘应用是否为底表管理协作者，后端接口查不到。",
-    "fix_hint": "由 Skill 用 lark-cli 以用户身份查看底表协作者确认；"
-    "缺失时在底表的协作者设置里，把「人才招聘」应用添加为可管理协作者。",
-}

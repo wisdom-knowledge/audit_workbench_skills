@@ -32,10 +32,11 @@ metadata:
 | 3 发布前确认 | 草稿已保存，每轮入队视图都已写入 | [publish.md](../audit-workbench-config/references/publish.md) |
 | 4 工作流交接 | 发布完成 | [handoff.md](../audit-workbench-workflow/references/handoff.md) |
 | 5 审核员 | 工作流全部启用 | [审核员](../audit-workbench-auditors/SKILL.md) 的「添加」和「检查飞书绑定」 |
-| 6 交付 | 审核员检查完成 | [report.md](references/report.md) |
+| 6 全链路校验与交付 | 审核员检查完成 | [publish.md](../audit-workbench-config/references/publish.md) 的「全链路校验」、[report.md](references/report.md) |
 | 续接 | 用户说「继续」「接着做」，或新会话恢复 | [resume.md](references/resume.md) |
 
 ## 失败就停
 
 以下情况不往下走，只告诉用户缺什么、怎么补：没有参考项目可用；对齐表里出现底表不存在的字段；
-发布前检查有阻断项；工作流同步失败或超时；模版二的人工修补没被回读确认；审核员一个都没加上。
+发布前配置校验有阻断项；工作流同步失败或超时；模版二的人工修补没被回读确认；审核员一个都没加上；
+全链路校验有 ❌。

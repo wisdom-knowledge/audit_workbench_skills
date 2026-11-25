@@ -25,7 +25,7 @@ INSTRUCTIONS = """\
 1. get_editor 读取项目现状，记下 summary 里的 draft_updated_at 与 published_version。
 2. parse_feishu 解析底表字段，parse_view_filter 解析入队视图。
 3. save_draft 保存草稿，base_updated_at 原样回传第 1 步读到的 draft_updated_at，不做时区换算。
-4. check_readiness 检查草稿；有 blocker 先修，unverified 项要另行确认。
+4. check_readiness 做发布前配置校验；有 blocker 先修，修好再检查。
 5. publish 发布，base_version 传第 1 步读到的 published_version（从未发布传 0）。
 6. wait_workflows 等待飞书工作流同步出结果；timed_out 时稍后再用 get_workflows 查询。
 7. 工作流 failed 时，按 lastError 排除原因后用 retry_workflows 只重试那一轮，再 wait_workflows。
@@ -47,6 +47,7 @@ d. 用户给出视图链接后调用 set_enqueue_views；要改字段或映射�
 e. pre_publish_checklist 展示发布前清单，用户确认后 publish。
 f. created_workflows 等待同步并列出已创建的工作流，用户确认后 enable_workflows。
 g. 用户提供审核员 talent_id 后 add_auditors，再 check_auditor_binding；未绑定的务必提醒。
+h. verify_pipeline 做发布后全链路校验，把 checklist_markdown 原样展示；有 ❌ 先处理再校验一次。
 
 中途恢复时调用 onboard_status，按返回的 stage 接着做。
 排查某条记录时调用 trace，把 trace_markdown 原样展示。
@@ -260,7 +261,7 @@ async def set_runtime_status(
     )
 
 
-@_tool("发布前检查清单：发布校验、工作流能否生成、审核状态枚举映射、审核员。不传 config 时检查已保存的草稿（没有草稿则检查已发布配置）。level 为 blocker 会导致发布失败，warning 不阻断发布但会影响使用，unverified 是这里查不到、需要另行确认的项，不算通过。")
+@_tool("发布前配置校验：只调后端发布预检，errors（发布会失败）和 workflowErrors（工作流建不出来）都记为 blocker，有 blocker 时 ready_to_publish=false，先修再发布。不传 config 时检查已保存的草稿（没有草稿则检查已发布配置）。审核员、底表依赖和工作流创建在发布后用 verify_pipeline 校验。")
 async def check_readiness(
     env: EnvArg,
     project_id: ProjectIdArg,
@@ -367,6 +368,16 @@ async def enable_workflows(
     confirm_project_id: ConfirmProjectIdArg = None,
 ) -> dict[str, Any]:
     return await _service.enable_workflows(env, project_id, confirm, confirm_project_id)
+
+
+@_tool("发布后全链路校验，只读：有审核员；每轮审核员 talent_id 字段是查找引用、且引用的表在同一个多维表格里；「人才招聘」是底表可管理协作者；等待工作流创建完成。每项 ✅ 通过、❌ 不通过（读不到也算 ❌）、⏳ 工作流仍在创建。把 checklist_markdown 原样展示给用户。")
+async def verify_pipeline(
+    env: EnvArg,
+    project_id: ProjectIdArg,
+    timeout: Annotated[int, Field(ge=10, le=180)] = 90,
+    interval: Annotated[int, Field(ge=2, le=30)] = 5,
+) -> dict[str, Any]:
+    return await _service.verify_pipeline(env, project_id, timeout, interval)
 
 
 @_tool("续接用：一次读取配置、工作流同步与飞书启用状态、审核员名单和飞书绑定，按接入阶段顺序判断项目停在哪一步。返回 stage（1–6）、stage_name、reason 和各项缺口。只读。")

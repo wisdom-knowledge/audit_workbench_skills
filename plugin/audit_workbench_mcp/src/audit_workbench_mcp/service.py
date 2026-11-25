@@ -14,7 +14,7 @@ import asyncio
 from datetime import datetime, timezone
 from typing import Any
 
-from . import draft_builder, errors, field_groups, handoff, lark, onboard_status, readiness, references, report, sls
+from . import draft_builder, errors, field_groups, handoff, lark, onboard_status, pipeline_check, readiness, references, report, sls
 from . import trace as trace_mod
 from .client import AdminClient
 from .envs import get_env
@@ -467,30 +467,18 @@ class AuditWorkbenchService:
                     errors.NOT_FOUND,
                     "项目既没有草稿也没有已发布配置，先保存草稿再检查",
                 )
-        target = get_env(env)
         validation = await self._client.request(
-            target,
+            get_env(env),
             "POST",
             f"/admin/projects/{project_id}/audit-workbench/validate",
             json={"config": config},
         )
-        auditors = await self._client.request(
-            target, "GET", f"/admin/projects/{project_id}/auditors", params={"limit": 1}
-        )
-        items = (
-            readiness.validation_items(validation)
-            + readiness.mapping_items(config)
-            + readiness.auditor_items(auditors)
-            + [dict(readiness.APP_PERMISSION_ITEM)]
-        )
-        levels = [i["level"] for i in items]
+        # Only the backend validation runs before publish; everything it reports blocks.
+        items = readiness.validation_items(validation)
         summary = {
             "config_source": source,
-            "blockers": levels.count(readiness.BLOCKER),
-            "warnings": levels.count(readiness.WARNING),
-            "unverified": levels.count(readiness.UNVERIFIED),
-            # Ready only when nothing blocks; unverified items still need a human check.
-            "ready_to_publish": readiness.BLOCKER not in levels,
+            "blockers": len(items),
+            "ready_to_publish": not items,
             "workflow_count": validation.get("workflowCount"),
             "workbench_type": validation.get("workbenchType"),
         }
@@ -683,16 +671,10 @@ class AuditWorkbenchService:
         if not draft:
             raise errors.AuditWorkbenchError(errors.NOT_FOUND, "项目没有草稿，没有可发布的内容")
         config = draft["config"]
-        validation = await self._client.request(
-            get_env(env),
-            "POST",
-            f"/admin/projects/{project_id}/audit-workbench/validate",
-            json={"config": config},
-        )
-        workbench_type = int(validation.get("workbenchType") or config.get("workbenchType") or 1)
+        checked = (await self.check_readiness(env, project_id, config))["data"]
+        workbench_type = int(checked["summary"].get("workbench_type") or config.get("workbenchType") or 1)
         planned = handoff.planned_workflows(config, workbench_type)
-        blockers = [str(e.get("message")) for e in validation.get("errors") or []]
-        blockers += [f"{e.get('message')}（发布能成功，但工作流建不出来）" for e in validation.get("workflowErrors") or []]
+        blockers = [str(i.get("message")) for i in checked["items"]]
         text = handoff.render_pre_publish_checklist(
             env=env, project_id=project_id, page_url=self.page_url(env, project_id),
             draft_updated_at=draft.get("updated_at"), workbench_type=workbench_type,
@@ -700,10 +682,50 @@ class AuditWorkbenchService:
         )
         return self._ok(
             env, project_id,
-            {"publishable": not validation.get("errors"), "planned": planned, "blockers": blockers},
+            {"publishable": not blockers, "planned": planned, "blockers": blockers},
             checklist_markdown=text,
             base_version=(editor.get("published") or {}).get("version") or 0,
         )
+
+    async def verify_pipeline(
+        self, env: str, project_id: int, timeout: float = 90, interval: float = 5
+    ) -> dict[str, Any]:
+        """After publish: auditors, talent_id lookup, 人才招聘 collaborator, workflow creation."""
+        target = get_env(env)
+        editor = await self._editor(env, project_id)
+        published = editor.get("published") or {}
+        version = int(published.get("version") or 0)
+        if not version:
+            raise errors.AuditWorkbenchError(errors.NOT_FOUND, "项目还没有发布，先发布再做全链路校验")
+        config = published.get("config") or {}
+        table_url = str(config.get("feishuTableUrl") or "")
+        # No project_id: parse only, do not rewrite the project's field catalog.
+        parsed = await self._client.request(
+            target, "POST", "/admin/audit-workbench/parse-feishu", json={"table_url": table_url}
+        )
+        app_token, table_id = str(parsed.get("app_token") or ""), str(parsed.get("table_id") or "")
+
+        auditors = await self._client.request(
+            target, "GET", f"/admin/projects/{project_id}/auditors", params={"skip": 0, "limit": 1}
+        )
+        count = int((auditors.get("summary") or {}).get("auditor_count") or auditors.get("count") or 0)
+        fields, tables, collaborator = await asyncio.gather(
+            asyncio.to_thread(lark.list_fields, app_token, table_id),
+            asyncio.to_thread(lark.list_tables, app_token),
+            asyncio.to_thread(lark.app_collaborator, app_token),
+        )
+        waited = await self.wait_workflows(env, project_id, timeout, interval)
+
+        items = (
+            [pipeline_check.auditors_item(count)]
+            + pipeline_check.talent_id_items(config, fields, tables)
+            + [pipeline_check.collaborator_item(collaborator)]
+            + [pipeline_check.workflow_item(waited["data"], waited["timed_out"])]
+        )
+        result = pipeline_check.judge(items)
+        text = pipeline_check.render(result, env=env, project_id=project_id, version=version)
+        return self._ok(env, project_id, result, checklist_markdown=text,
+                        timed_out=waited["timed_out"], published_version=version)
 
     async def _workflow_rows(self, summary: dict[str, Any]) -> list[dict[str, Any]]:
         app_token = summary.get("appToken") or ""

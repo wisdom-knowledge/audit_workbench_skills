@@ -156,7 +156,7 @@ def readiness_handler(validation: dict[str, Any], auditor_count: int, editor: di
     return handler
 
 
-def test_readiness_combines_all_sources() -> None:
+def test_readiness_only_uses_backend_validation_and_all_items_block() -> None:
     validation = {
         "publishable": False,
         "errors": [{"rule": "fields_non_empty", "message": "至少一个字段", "step": 1, "field_key": None}],
@@ -167,31 +167,22 @@ def test_readiness_combines_all_sources() -> None:
     out = asyncio.run(service.check_readiness("boe", 7, CONFIG))["data"]
 
     codes = {i["code"]: i["level"] for i in out["items"]}
-    assert codes == {
-        "fields_non_empty": "blocker",
-        "workflow_plan_invalid": "warning",
-        "status_value_unmapped": "warning",
-        "no_auditors": "blocker",
-        "app_collaborator_unverified": "unverified",
-    }
+    assert codes == {"fields_non_empty": "blocker", "workflow_plan_invalid": "blocker"}
     assert out["summary"]["ready_to_publish"] is False
     assert out["summary"]["blockers"] == 2
-    unmapped = next(i for i in out["items"] if i["code"] == "status_value_unmapped")
-    assert "打回" in unmapped["message"]
-    sent = json.loads(next(c for c in calls if c.url.path == VALIDATE_PATH).content)
+    # Auditors and local status mapping are no longer part of the pre-publish check.
+    assert {c.url.path for c in calls} == {VALIDATE_PATH}
+    sent = json.loads(calls[0].content)
     assert sent == {"config": CONFIG}
 
 
-def test_readiness_unverified_does_not_block() -> None:
+def test_readiness_passes_when_backend_reports_nothing() -> None:
     validation = {"publishable": True, "errors": [], "workflowErrors": [],
                   "workbenchType": 1, "workflowCount": 1}
-    mapped = json.loads(json.dumps(CONFIG))
-    mapped["auditStatusRules"][0]["statusValueMapping"]["打回"] = "待返修"
-    service, _ = make_service(readiness_handler(validation, auditor_count=3))
-    out = asyncio.run(service.check_readiness("boe", 7, mapped))["data"]
+    service, _ = make_service(readiness_handler(validation, auditor_count=0))
+    out = asyncio.run(service.check_readiness("boe", 7, CONFIG))["data"]
     assert out["summary"]["ready_to_publish"] is True
-    assert out["summary"]["unverified"] == 1
-    assert [i["code"] for i in out["items"]] == ["app_collaborator_unverified"]
+    assert out["items"] == []
 
 
 def test_readiness_falls_back_to_draft_then_errors_when_nothing_saved() -> None:
