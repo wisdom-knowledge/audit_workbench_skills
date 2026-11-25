@@ -10,7 +10,9 @@ MCP 打包在同一个插件里，一起安装。子技能之间用相对路径�
 | Claude Code | `claude plugin marketplace add wisdom-knowledge/audit_workbench_skills`，然后 `claude plugin install audit-workbench@audit-workbench` | `claude plugin marketplace update audit-workbench`，再 `claude plugin update audit-workbench@audit-workbench`，重启生效 |
 | Codex | `codex plugin marketplace add wisdom-knowledge/audit_workbench_skills --ref main`，然后 `codex plugin add audit-workbench@audit-workbench` | `codex plugin marketplace upgrade audit-workbench` |
 
-插件管理器负责更新，技能里不执行 Git，也不替用户装插件。用户问怎么装、怎么更新时，给出上表的命令。
+每个会话第一次使用时，`check_update()` 会对比本机版本和 GitHub main 上的版本。有新版本时，技能按它
+返回的 `commands` 在终端执行上表的更新命令，然后请用户重启客户端。技能不直接操作 Git，也不替用户首次安装
+插件。用户问怎么装时，给出上表的命令。
 
 ## 前提
 

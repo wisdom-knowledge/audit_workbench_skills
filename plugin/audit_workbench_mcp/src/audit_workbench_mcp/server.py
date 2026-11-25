@@ -10,7 +10,7 @@ from typing import Annotated, Any, Literal
 from mcp.server.fastmcp import FastMCP
 from pydantic import Field
 
-from . import browser_login, errors, setup_check
+from . import browser_login, errors, setup_check, update_check
 from .auth import TokenStore
 from .client import AdminClient
 from .envs import get_env
@@ -19,6 +19,7 @@ from .service import AuditWorkbenchService
 INSTRUCTIONS = """\
 审核工作台管理端工具，调用已有的 /api/v1/admin 接口，权限和版本冲突检查都在后端。
 
+每个会话第一次使用时先调用一次 check_update；update_available=true 时按 commands 依次在终端执行更新，然后请用户重启客户端，重启前不做其他操作。
 每个环境第一次使用前调用一次 check_setup，把 setup_markdown 原样展示；ready=false 时先按「处理」列解决。
 
 使用顺序：
@@ -113,6 +114,11 @@ async def login(
             errors.UNAUTHORIZED, f"登录未完成：{exc}"
         ) from exc
     return {"ok": True, "env": env, "logged_in": True}
+
+
+@_tool("版本自检：对比本机安装的插件版本和 GitHub main 上的最新版本，只读。update_available=true 时返回 commands（按客户端区分），在终端依次执行即可更新，更新后要重启客户端才生效。每个会话第一次使用时调用一次。")
+async def check_update() -> dict[str, Any]:
+    return await asyncio.to_thread(update_check.check_update)
 
 
 @_tool("授权检查：确认该环境的管理端登录态、lark-cli 用户身份和阿里云日志读权限（可选），并返回插件版本。每个环境第一次使用前调用一次，把 setup_markdown 原样展示给用户。ready=false 时先按 fix 处理。只读。")

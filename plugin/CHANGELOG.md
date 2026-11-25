@@ -3,6 +3,12 @@
 版本号同时写在 `.claude-plugin/plugin.json`、`.codex-plugin/plugin.json` 和
 `audit_workbench_mcp/pyproject.toml`，三处保持一致，`check_setup` 返回的就是这个版本。
 
+## 1.0.6
+
+- 新增只读工具 `check_update`：对比本机插件版本和 GitHub main 上的版本，有新版本时按客户端（Claude Code /
+  Codex）返回更新命令。入口技能把它作为第一步，每个会话第一次使用时调用；有新版本就在终端执行更新命令，
+  请用户重启后再继续。查不到远端版本或开发者本地安装时按当前版本继续。
+
 ## 1.0.5
 
 - 发布前「配置校验」只看后端发布预检：`check_readiness` 把 `errors` 和 `workflowErrors` 都记为
